@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "بدل توقعات الذكي - بوت إشارات التداول",
-  description: "بوت تحليل فني ذكي يستخدم أنماط الشموع اليابانية والمؤشرات التقنية لتقديم إشارات تداول احترافية",
-  keywords: ["تداول", "شموع يابانية", "إشارات", "تحليل فني", "فوركس"],
+  title: "ICT Pro Bot - بوت تداول احترافي",
+  description: "بوت تحليل فني احترافي يجمع بين الشموع اليابانية و ICT Smart Money مع أسعار حقيقية من السوق",
+  keywords: ["تداول", "شموع يابانية", "ICT", "إشارات", "تحليل فني", "فوركس", "Smart Money"],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },

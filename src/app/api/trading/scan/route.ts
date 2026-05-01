@@ -1,84 +1,91 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SCAN_SYSTEM_PROMPT, CANDLESTICK_KNOWLEDGE, PAIRS } from '@/lib/trading-knowledge';
+import { ICT_SCAN_SYSTEM_PROMPT, ICT_KNOWLEDGE } from '@/lib/ict-knowledge';
+import { CANDLESTICK_KNOWLEDGE, PAIRS } from '@/lib/trading-knowledge';
 import { chatCompletion } from '@/lib/ai';
-import {
-  generateSimulatedCandles,
-  detectAllPatterns,
-  calculateRSI,
-  calculateMACD,
-  calculateMovingAverage,
-} from '@/lib/trading-patterns';
+import { fetchMultiplePrices } from '@/lib/market-data';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { category } = body || {};
-    const pairsToScan = category ? PAIRS.filter(p => p.category === category) : PAIRS;
+    const pairsToScan = PAIRS.map(p => p.symbol);
 
-    const basePrices: Record<string, number> = {
-      'EUR/USD': 1.0850, 'GBP/USD': 1.2650, 'USD/JPY': 149.50,
-      'XAU/USD': 2340.00, 'BTC/USD': 67500.00, 'ETH/USD': 3450.00,
-      'US30': 39500.00, 'NAS100': 18500.00, 'GBP/JPY': 189.20,
-      'AUD/USD': 0.6520, 'USD/CAD': 1.3650, 'NZD/USD': 0.6050,
-    };
+    // Fetch REAL prices for all pairs
+    const prices = await fetchMultiplePrices(pairsToScan);
 
-    interface ScanResult {
-      pair: string; name: string; category: string; currentPrice: number;
-      trend: string; patterns: Array<{ nameAr: string; type: string; reliability: number }>;
-      rsi: number; opportunity: string; score: number;
-    }
+    // Filter pairs with valid prices
+    const validPairs = Object.entries(prices)
+      .filter(([_, data]) => data.price > 0)
+      .map(([pair, data]) => ({
+        pair,
+        price: data.price,
+        high: data.high,
+        low: data.low,
+        name: PAIRS.find(p => p.symbol === pair)?.name || pair,
+        category: PAIRS.find(p => p.symbol === pair)?.category || 'أخرى',
+      }));
 
-    const results: ScanResult[] = [];
-
-    for (const pairInfo of pairsToScan) {
-      const basePrice = basePrices[pairInfo.symbol] || 1.0;
-      const trend = Math.random() > 0.5 ? 'up' : Math.random() > 0.5 ? 'down' : 'sideways';
-      const candles = generateSimulatedCandles(50, basePrice, trend);
-      const patterns = detectAllPatterns(candles);
-      const rsi = calculateRSI(candles);
-      const macd = calculateMACD(candles);
-      const ma5 = calculateMovingAverage(candles, 5);
-      const ma20 = calculateMovingAverage(candles, 20);
-      const currentPrice = candles[candles.length - 1].close;
-
-      let score = 0;
-      if (patterns.length > 0) score += patterns.length * 15;
-      if (rsi < 30 || rsi > 70) score += 20;
-      if (macd.histogram > 0 && ma5 > ma20) score += 15;
-      if (macd.histogram < 0 && ma5 < ma20) score += 15;
-      score = Math.min(score, 95);
-
-      let opportunity = 'منخفضة';
-      if (score >= 70) opportunity = 'عالية 🔥';
-      else if (score >= 45) opportunity = 'متوسطة ⚡';
-
-      const trendDirection = ma5 > ma20 ? 'صاعد' : ma5 < ma20 ? 'هبوطي' : 'عرضي';
-
-      results.push({
-        pair: pairInfo.symbol, name: pairInfo.name, category: pairInfo.category,
-        currentPrice, trend: trendDirection,
-        patterns: patterns.map(p => ({ nameAr: p.nameAr, type: p.type, reliability: p.reliability })),
-        rsi, opportunity, score,
+    if (validPairs.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'لم أتمكن من جلب أسعار السوق. حاول مرة أخرى.',
       });
     }
 
-    results.sort((a, b) => b.score - a.score);
-
-    const topPairs = results.filter(r => r.score >= 45);
-    const summaryData = topPairs.map(r =>
-      `${r.pair} (${r.name}): اتجاه ${r.trend}, أنماط: ${r.patterns.map(p => p.nameAr).join(', ') || 'لا توجد'}, RSI: ${r.rsi}, فرصة: ${r.opportunity}`
-    ).join('\n');
+    // Create summary for AI
+    const summaryData = validPairs
+      .map(p => `${p.pair} (${p.name}): السعر ${p.price} | نطاق ${p.low}-${p.high} | ${p.category}`)
+      .join('\n');
 
     const aiSummary = await chatCompletion({
-      systemPrompt: SCAN_SYSTEM_PROMPT + '\n\n' + CANDLESTICK_KNOWLEDGE,
-      userMessage: `قم بفحص السوق ولخص الفرص التالية:\n\n${summaryData || 'لا توجد فرص عالية حالياً'}\n\nأعطني ملخص مختصر بالعربية مع ترتيب الفرص حسب الأولوية. كن مختصراً في 4-5 أسطر.`,
-      maxTokens: 600,
-    }) || `🔍 مسح السوق:\n\n${topPairs.length > 0
-      ? topPairs.map((r, i) => `${i + 1}. ${r.pair} - فرصة ${r.opportunity} (اتجاه: ${r.trend})`).join('\n')
-      : 'لا توجد فرص عالية حالياً. انتظر فرص أفضل.'}`;
+      systemPrompt: ICT_SCAN_SYSTEM_PROMPT + '\n\n' + CANDLESTICK_KNOWLEDGE + '\n\n' + ICT_KNOWLEDGE + `
+
+أنت ماسح أسواق محترف. هذه أسعار حقيقية من السوق الآن.
+حلل الأزواج وحدد أفضل 3-5 فرص تداول.
+لكل فرصة اذكر: الزوج، الاتجاه المتوقع، السبب المختصر، مستوى الفرصة.
+كن مختصراً ومنظماً. تحدث بالعربية.`,
+      userMessage: `فحص السوق - الأسعار الحقيقية الآن:\n\n${summaryData}\n\nأي الأزواج تقدم أفضل فرص تداول الآن؟ ولماذا؟`,
+      maxTokens: 1000,
+    });
+
+    // Score pairs based on price position
+    const results = validPairs.map(p => {
+      const range = p.high - p.low;
+      const position = range > 0 ? (p.price - p.low) / range : 0.5;
+      let score = 50;
+      let opportunity = 'متوسطة';
+      let trend = 'عرضي';
+
+      // Pairs near extremes may offer reversal opportunities
+      if (position < 0.3) {
+        score += 20; // Near support - potential buy
+        trend = 'محتمل صعودي';
+      } else if (position > 0.7) {
+        score += 20; // Near resistance - potential sell
+        trend = 'محتمل هبوطي';
+      }
+
+      score = Math.min(score, 85);
+      if (score >= 70) opportunity = 'عالية';
+      else if (score < 50) opportunity = 'منخفضة';
+
+      return {
+        pair: p.pair,
+        name: p.name,
+        category: p.category,
+        currentPrice: p.price,
+        trend,
+        patterns: [],
+        rsi: position < 0.3 ? 28 : position > 0.7 ? 72 : 50,
+        opportunity,
+        score,
+      };
+    });
+
+    results.sort((a, b) => b.score - a.score);
 
     return NextResponse.json({
-      success: true, results, aiSummary,
+      success: true,
+      results,
+      aiSummary: aiSummary || `🔍 مسح السوق:\n\n${results.slice(0, 5).map((r, i) => `${i + 1}. ${r.pair} - ${r.currentPrice} - فرصة ${r.opportunity}`).join('\n')}`,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

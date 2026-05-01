@@ -329,21 +329,29 @@ export default function Home() {
     addMessage({ type: 'user', content: `📊 Give me a signal for ${targetPair}` });
     simulateTyping(async () => {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25000);
         const res = await fetch('/api/trading/signal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pair: targetPair, timeframe: 'H4' }),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.signal) {
           addMessage({ type: 'signal', content: '', signalData: data.signal });
         } else {
           addMessage({ type: 'bot', content: `❌ ${data.error || 'Could not generate a signal. Please try again.'}` });
         }
-      } catch {
-        addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          addMessage({ type: 'bot', content: '⏱️ Request timed out. The market is taking too long to respond. Please try again.' });
+        } else {
+          addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+        }
       }
-    }, 2000, 5000);
+    }, 1000, 2000);
   }, [selectedPair, addMessage, simulateTyping]);
 
   // Analyze pair
@@ -352,21 +360,29 @@ export default function Home() {
     addMessage({ type: 'user', content: `🔍 Analyze ${targetPair}` });
     simulateTyping(async () => {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25000);
         const res = await fetch('/api/trading/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pair: targetPair, timeframe: 'H4' }),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.aiAnalysis) {
           addMessage({ type: 'analysis', content: data.aiAnalysis });
         } else {
           addMessage({ type: 'bot', content: `❌ ${data.error || 'Analysis failed.'}` });
         }
-      } catch {
-        addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          addMessage({ type: 'bot', content: '⏱️ Request timed out. Please try again.' });
+        } else {
+          addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+        }
       }
-    }, 3000, 6000);
+    }, 1000, 2000);
   }, [selectedPair, addMessage, simulateTyping]);
 
   // Market scan
@@ -374,17 +390,24 @@ export default function Home() {
     addMessage({ type: 'user', content: '🔍 Scan the market' });
     simulateTyping(async () => {
       try {
-        const res = await fetch('/api/trading/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        const res = await fetch('/api/trading/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}), signal: controller.signal });
+        clearTimeout(timeout);
         const data = await res.json();
         if (data.success) {
           addMessage({ type: 'scan', content: '', scanData: data.results, scanSummary: data.aiSummary });
         } else {
           addMessage({ type: 'bot', content: `❌ ${data.error || 'Scan failed.'}` });
         }
-      } catch {
-        addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          addMessage({ type: 'bot', content: '⏱️ Scan timed out. Please try again.' });
+        } else {
+          addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+        }
       }
-    }, 4000, 8000);
+    }, 1000, 2000);
   }, [addMessage, simulateTyping]);
 
   // Send chat message
@@ -413,21 +436,29 @@ export default function Home() {
 
     simulateTyping(async () => {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25000);
         const res = await fetch('/api/trading/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: msg }),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.response) {
           addMessage({ type: 'bot', content: data.response });
         } else {
           addMessage({ type: 'bot', content: '❌ Could not respond. Please try again.' });
         }
-      } catch {
-        addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          addMessage({ type: 'bot', content: '⏱️ Request timed out. Please try again.' });
+        } else {
+          addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+        }
       }
-    }, 1500, 3000);
+    }, 1000, 2000);
   }, [inputValue, isTyping, addMessage, simulateTyping, handleGetSignal, handleAnalyze, handleScan]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

@@ -4,6 +4,8 @@ import { CANDLESTICK_KNOWLEDGE, PAIRS } from '@/lib/trading-knowledge';
 import { chatCompletion } from '@/lib/ai';
 import { fetchMultiplePrices } from '@/lib/market-data';
 
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   try {
     const pairsToScan = PAIRS.map(p => p.symbol);
@@ -30,23 +32,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Create summary for AI
+    // Create summary for AI - concise
     const summaryData = validPairs
-      .map(p => `${p.pair} (${p.name}): Price ${p.price} | Range ${p.low}-${p.high} | ${p.category}`)
-      .join('\n');
+      .map(p => `${p.pair}: ${p.price} (${p.low}-${p.high})`)
+      .join(' | ');
 
     const aiSummary = await chatCompletion({
-      systemPrompt: ICT_SCAN_SYSTEM_PROMPT + '\n\n' + CANDLESTICK_KNOWLEDGE + '\n\n' + ICT_KNOWLEDGE + `
-
-You are a professional market scanner. These are real-time market prices.
-Analyze the pairs and identify the top 3-5 trading opportunities.
-For each opportunity, mention: the pair, expected direction, brief reason, and opportunity level.
-Be concise and organized. Respond in English.`,
-      userMessage: `Market Scan - Real-time prices:\n\n${summaryData}\n\nWhich pairs offer the best trading opportunities right now? And why?`,
-      maxTokens: 1000,
+      systemPrompt: `You are a market scanner. Given real prices, identify the top 3 trading opportunities. Be concise - 150 words max. Respond in English.`,
+      userMessage: `Scan: ${summaryData}. Top 3 opportunities?`,
+      maxTokens: 300,
     });
 
-    // Score pairs based on price position
+    // Score pairs
     const results = validPairs.map(p => {
       const range = p.high - p.low;
       const position = range > 0 ? (p.price - p.low) / range : 0.5;
@@ -54,12 +51,11 @@ Be concise and organized. Respond in English.`,
       let opportunity = 'Medium';
       let trend = 'Sideways';
 
-      // Pairs near extremes may offer reversal opportunities
       if (position < 0.3) {
-        score += 20; // Near support - potential buy
+        score += 20;
         trend = 'Potentially Bullish';
       } else if (position > 0.7) {
-        score += 20; // Near resistance - potential sell
+        score += 20;
         trend = 'Potentially Bearish';
       }
 

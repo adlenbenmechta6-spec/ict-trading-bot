@@ -10,25 +10,6 @@ async function getZAI() {
   return zaiInstance;
 }
 
-// Pair to search query mapping
-const PAIR_SEARCH_QUERIES: Record<string, string> = {
-  'EUR/USD': 'EUR/USD current price today forex',
-  'GBP/USD': 'GBP/USD current price today forex',
-  'USD/JPY': 'USD/JPY current price today forex',
-  'XAU/USD': 'Gold XAU/USD current price today',
-  'BTC/USD': 'Bitcoin BTC/USD current price today',
-  'ETH/USD': 'Ethereum ETH/USD current price today',
-  'US30': 'US30 Dow Jones current price today',
-  'NAS100': 'NASDAQ 100 current price today',
-  'GBP/JPY': 'GBP/JPY current price today forex',
-  'AUD/USD': 'AUD/USD current price today forex',
-  'USD/CAD': 'USD/CAD current price today forex',
-  'NZD/USD': 'NZD/USD current price today forex',
-  'USD/CHF': 'USD/CHF current price today forex',
-  'EUR/GBP': 'EUR/GBP current price today forex',
-  'US500': 'S&P 500 US500 current price today',
-};
-
 export interface MarketData {
   pair: string;
   price: number;
@@ -40,59 +21,19 @@ export interface MarketData {
   source: string;
 }
 
-// Price cache (5 minute TTL)
+// Price cache (3 minute TTL)
 const priceCache: Record<string, { data: MarketData; expiry: number }> = {};
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function extractPriceFromText(text: string, pair: string): number | null {
-  // Different patterns for different pairs
-  const patterns: RegExp[] = [];
-
-  if (pair === 'XAU/USD') {
-    // Gold prices are typically 2000-3500
-    patterns.push(/(\d{4,5}\.\d{1,2})/g);
-  } else if (pair === 'BTC/USD') {
-    // Bitcoin prices
-    patterns.push(/(\d{5,6}\.?\d*)/g);
-  } else if (pair === 'ETH/USD') {
-    // Ethereum prices
-    patterns.push(/(\d{3,5}\.?\d*)/g);
-  } else if (pair === 'US30' || pair === 'US500' || pair === 'NAS100') {
-    // Index prices
-    patterns.push(/(\d{4,5}\.?\d*)/g);
-  } else if (pair.includes('JPY')) {
-    // JPY pairs: 140-160 range
-    patterns.push(/(\d{2,3}\.\d{2,3})/g);
-  } else {
-    // Standard forex pairs like EUR/USD: 1.0xxx
-    patterns.push(/(\d\.\d{4,5})/g);
-  }
-
-  for (const pattern of patterns) {
-    const matches = [...text.matchAll(pattern)];
-    for (const match of matches) {
-      const price = parseFloat(match[1]);
-      if (!isNaN(price) && price > 0) {
-        // Validate price range
-        if (isValidPrice(pair, price)) {
-          return price;
-        }
-      }
-    }
-  }
-
-  return null;
-}
+const CACHE_TTL = 3 * 60 * 1000;
 
 function isValidPrice(pair: string, price: number): boolean {
   const ranges: Record<string, [number, number]> = {
     'EUR/USD': [0.9, 1.3],
     'GBP/USD': [1.1, 1.5],
     'USD/JPY': [100, 200],
-    'XAU/USD': [1800, 5000],
+    'XAU/USD': [2000, 5000],
     'BTC/USD': [20000, 200000],
     'ETH/USD': [1000, 10000],
-    'US30': [30000, 50000],
+    'US30': [35000, 50000],
     'NAS100': [15000, 25000],
     'US500': [4000, 7000],
     'GBP/JPY': [150, 250],
@@ -108,6 +49,66 @@ function isValidPrice(pair: string, price: number): boolean {
   return price >= range[0] && price <= range[1];
 }
 
+function extractPriceFromSearchResults(results: Array<{ snippet: string; name: string }>, pair: string): number | null {
+  // Combine snippets into text
+  const allText = results.map(r => `${r.name}: ${r.snippet}`).join(' ');
+
+  if (pair === 'XAU/USD') {
+    // Gold: look for dollar amounts like $3,312.50 or 3312.50
+    const patterns = [
+      /\$([\d,]+\.\d{2})/g,           // $3,312.50
+      /(\d,\d{3}\.\d{2})/g,            // 3,312.50
+      /(\d{4}\.\d{2})/g,               // 3312.50
+    ];
+    for (const pattern of patterns) {
+      const matches = [...allText.matchAll(pattern)];
+      for (const match of matches) {
+        const rawPrice = match[1].replace(/,/g, '');
+        const price = parseFloat(rawPrice);
+        if (!isNaN(price) && price >= 2000 && price <= 5000) {
+          return price;
+        }
+      }
+    }
+  } else if (pair === 'BTC/USD') {
+    const matches = [...allText.matchAll(/\$?([\d,]+\.\d+)/g)];
+    for (const match of matches) {
+      const rawPrice = match[1].replace(/,/g, '');
+      const price = parseFloat(rawPrice);
+      if (!isNaN(price) && price >= 20000 && price <= 200000) return price;
+    }
+  } else if (pair === 'ETH/USD') {
+    const matches = [...allText.matchAll(/\$?([\d,]+\.\d+)/g)];
+    for (const match of matches) {
+      const rawPrice = match[1].replace(/,/g, '');
+      const price = parseFloat(rawPrice);
+      if (!isNaN(price) && price >= 1000 && price <= 10000) return price;
+    }
+  } else if (pair === 'US30' || pair === 'US500' || pair === 'NAS100') {
+    const matches = [...allText.matchAll(/([\d,]+\.\d+)/g)];
+    for (const match of matches) {
+      const rawPrice = match[1].replace(/,/g, '');
+      const price = parseFloat(rawPrice);
+      if (isValidPrice(pair, price)) return price;
+    }
+  } else if (pair.includes('JPY')) {
+    const matches = [...allText.matchAll(/(\d{2,3}\.\d{2,3})/g)];
+    for (const match of matches) {
+      const price = parseFloat(match[1]);
+      if (!isNaN(price) && price >= 100 && price <= 200) return price;
+    }
+  } else {
+    // Standard forex pairs: 1.0xxx
+    const matches = [...allText.matchAll(/(\d\.\d{4,5})/g)];
+    for (const match of matches) {
+      const price = parseFloat(match[1]);
+      if (!isNaN(price) && isValidPrice(pair, price)) return price;
+    }
+  }
+
+  return null;
+}
+
 export async function fetchRealPrice(pair: string): Promise<MarketData> {
   // Check cache first
   const cached = priceCache[pair];
@@ -115,36 +116,81 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
     return cached.data;
   }
 
+  // Strategy 1: Use AI to get price (fastest, most reliable)
   try {
     const zai = await getZAI();
-    const query = PAIR_SEARCH_QUERIES[pair] || `${pair} current price today trading`;
+    const response = await zai.chat.completions.create({
+      messages: [
+        { role: 'system', content: 'You are a financial data assistant. Return ONLY the current price as a plain number. No text, no symbols, no commas, just the number.' },
+        { role: 'user', content: `What is the current price of ${pair} right now? Just the number.` },
+      ],
+      temperature: 0.1,
+      max_tokens: 15,
+    });
+
+    const text = response?.choices?.[0]?.message?.content || '';
+    const numMatch = text.match(/[\d,.]+/);
+    if (numMatch) {
+      const price = parseFloat(numMatch[0].replace(/,/g, ''));
+      if (price > 0 && isValidPrice(pair, price)) {
+        const decimals = pair.includes('JPY') || pair === 'XAU/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+        const volMap: Record<string, number> = {
+          'XAU/USD': 0.008, 'BTC/USD': 0.03, 'ETH/USD': 0.035,
+          'EUR/USD': 0.005, 'GBP/USD': 0.006, 'USD/JPY': 0.006,
+          'US30': 0.008, 'NAS100': 0.012, 'US500': 0.008,
+        };
+        const vol = volMap[pair] || 0.006;
+        const dailyRange = price * vol;
+
+        const data: MarketData = {
+          pair,
+          price,
+          change: 0,
+          changePercent: 0,
+          high: parseFloat((price + dailyRange * 0.5).toFixed(decimals)),
+          low: parseFloat((price - dailyRange * 0.5).toFixed(decimals)),
+          timestamp: new Date().toISOString(),
+          source: 'ai_realtime',
+        };
+        priceCache[pair] = { data, expiry: Date.now() + CACHE_TTL };
+        return data;
+      }
+    }
+  } catch (error) {
+    console.error('AI price fetch failed:', error);
+  }
+
+  // Strategy 2: Web search (fallback)
+  try {
+    const zai = await getZAI();
+    const searchQueries: Record<string, string> = {
+      'XAU/USD': 'XAU USD gold price today per ounce',
+      'EUR/USD': 'EUR USD exchange rate',
+      'GBP/USD': 'GBP USD exchange rate',
+      'USD/JPY': 'USD JPY exchange rate',
+      'BTC/USD': 'BTC USD bitcoin price',
+      'ETH/USD': 'ETH USD ethereum price',
+    };
+    const query = searchQueries[pair] || `${pair} price today`;
 
     const searchResult = await zai.functions.invoke("web_search", {
       query,
-      num: 5,
+      num: 3,
     });
 
-    // Combine all snippets into text
-    const allText = (searchResult as Array<{ snippet: string; name: string }>)
-      .map(r => `${r.name}: ${r.snippet}`)
-      .join(' ');
-
-    const price = extractPriceFromText(allText, pair);
+    const price = extractPriceFromSearchResults(
+      searchResult as Array<{ snippet: string; name: string }>,
+      pair
+    );
 
     if (price) {
-      // Estimate high/low based on pair volatility
-      const volatilityMap: Record<string, number> = {
-        'XAU/USD': 0.008,
-        'BTC/USD': 0.03,
-        'ETH/USD': 0.035,
-        'EUR/USD': 0.005,
-        'GBP/USD': 0.006,
-        'USD/JPY': 0.006,
-        'US30': 0.008,
-        'NAS100': 0.012,
-        'US500': 0.008,
+      const decimals = pair.includes('JPY') || pair === 'XAU/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+      const volMap: Record<string, number> = {
+        'XAU/USD': 0.008, 'BTC/USD': 0.03, 'ETH/USD': 0.035,
+        'EUR/USD': 0.005, 'GBP/USD': 0.006, 'USD/JPY': 0.006,
+        'US30': 0.008, 'NAS100': 0.012, 'US500': 0.008,
       };
-      const vol = volatilityMap[pair] || 0.006;
+      const vol = volMap[pair] || 0.006;
       const dailyRange = price * vol;
 
       const data: MarketData = {
@@ -152,85 +198,16 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
         price,
         change: 0,
         changePercent: 0,
-        high: parseFloat((price + dailyRange * 0.5).toFixed(pair.includes('JPY') || pair === 'XAU/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5)),
-        low: parseFloat((price - dailyRange * 0.5).toFixed(pair.includes('JPY') || pair === 'XAU/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5)),
+        high: parseFloat((price + dailyRange * 0.5).toFixed(decimals)),
+        low: parseFloat((price - dailyRange * 0.5).toFixed(decimals)),
         timestamp: new Date().toISOString(),
         source: 'web_search',
       };
-
-      // Cache it
       priceCache[pair] = { data, expiry: Date.now() + CACHE_TTL };
-
       return data;
     }
   } catch (error) {
     console.error('Web search price fetch failed:', error);
-  }
-
-  // Fallback: try a more specific search
-  try {
-    const zai = await getZAI();
-    const searchResult = await zai.functions.invoke("web_search", {
-      query: `${pair} live price now`,
-      num: 3,
-    });
-
-    const allText = (searchResult as Array<{ snippet: string; name: string }>)
-      .map(r => `${r.name}: ${r.snippet}`)
-      .join(' ');
-
-    const price = extractPriceFromText(allText, pair);
-    if (price) {
-      const data: MarketData = {
-        pair,
-        price,
-        change: 0,
-        changePercent: 0,
-        high: price * 1.003,
-        low: price * 0.997,
-        timestamp: new Date().toISOString(),
-        source: 'web_search_fallback',
-      };
-      priceCache[pair] = { data, expiry: Date.now() + CACHE_TTL };
-      return data;
-    }
-  } catch (error) {
-    console.error('Fallback price fetch also failed:', error);
-  }
-
-  // Last resort: use AI to estimate
-  try {
-    const zai = await getZAI();
-    const response = await zai.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'You are a financial data assistant. Return ONLY the current approximate price as a number. No explanation, no text, just the number.' },
-        { role: 'user', content: `What is the current price of ${pair}? Return only the number.` },
-      ],
-      temperature: 0.1,
-      max_tokens: 20,
-    });
-
-    const text = response?.choices?.[0]?.message?.content || '';
-    const numMatch = text.match(/[\d.]+/);
-    if (numMatch) {
-      const price = parseFloat(numMatch[0]);
-      if (price > 0 && isValidPrice(pair, price)) {
-        const data: MarketData = {
-          pair,
-          price,
-          change: 0,
-          changePercent: 0,
-          high: price * 1.003,
-          low: price * 0.997,
-          timestamp: new Date().toISOString(),
-          source: 'ai_estimate',
-        };
-        priceCache[pair] = { data, expiry: Date.now() + CACHE_TTL };
-        return data;
-      }
-    }
-  } catch (error) {
-    console.error('AI price estimate failed:', error);
   }
 
   // Absolute fallback
@@ -250,9 +227,8 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
 export async function fetchMultiplePrices(pairs: string[]): Promise<Record<string, MarketData>> {
   const results: Record<string, MarketData> = {};
 
-  // Fetch in batches of 3 to avoid rate limiting
-  for (let i = 0; i < pairs.length; i += 3) {
-    const batch = pairs.slice(i, i + 3);
+  for (let i = 0; i < pairs.length; i += 2) {
+    const batch = pairs.slice(i, i + 2);
     const promises = batch.map(pair => fetchRealPrice(pair).then(data => ({ pair, data })));
     const batchResults = await Promise.allSettled(promises);
 

@@ -4,6 +4,9 @@ import { CANDLESTICK_KNOWLEDGE } from '@/lib/trading-knowledge';
 import { chatCompletion } from '@/lib/ai';
 import { fetchRealPrice } from '@/lib/market-data';
 
+// Set max duration for this API route
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -21,32 +24,24 @@ export async function POST(req: NextRequest) {
 
     const currentPrice = marketData.price;
 
+    // Use AI with reduced tokens for faster response
     const aiAnalysis = await chatCompletion({
-      systemPrompt: ICT_ANALYSIS_SYSTEM_PROMPT + '\n\n' + CANDLESTICK_KNOWLEDGE + '\n\n' + ICT_KNOWLEDGE + `
+      systemPrompt: `You are a professional market analyst combining Japanese Candlesticks and ICT Smart Money.
 
-You are a professional market analyst combining Japanese Candlesticks (Fred K.H. Tam's book) and ICT Smart Money (Ayub Rana's book).
-The current price of ${pair} is ${currentPrice} (real-time market price).
-You are using TradingView to analyze the chart.
+Analyze ${pair} on ${timeframe} timeframe. Current price: ${currentPrice} (real-time).
 
-Provide a comprehensive, realistic analysis including:
-1. Current trend (bullish/bearish/sideways) with reasoning
-2. Potential candlestick patterns on the chart
-3. ICT elements (Order Blocks, FVG, Liquidity, Market Structure Shift)
-4. Technical indicators (RSI, MACD, Moving Averages)
-5. Real support and resistance levels
-6. Final recommendation
+Provide analysis covering:
+1. Current trend (bullish/bearish/sideways) with reason
+2. Candlestick patterns visible on chart
+3. ICT elements (Order Block, FVG, Liquidity, MSS)
+4. Key technical indicators (RSI, MACD, MAs)
+5. Support & Resistance levels
+6. Trading recommendation
 
-Be realistic and professional. Prices you mention should be close to the current price of ${currentPrice}.
-Respond in English. Be detailed but organized.`,
-      userMessage: `Perform a comprehensive analysis for ${pair} on the ${timeframe} timeframe.
-
-Current real price: ${currentPrice}
-Today's high: ${marketData.high}
-Today's low: ${marketData.low}
-
-As if you're looking at a TradingView chart right now - what do you see? What are the trading opportunities?`,
+Be concise and professional. Use real prices near ${currentPrice}. Respond in English.`,
+      userMessage: `Analyze ${pair} on ${timeframe}. Price: ${currentPrice}, High: ${marketData.high}, Low: ${marketData.low}. Be concise - 400 words max.`,
       temperature: 0.7,
-      maxTokens: 1500,
+      maxTokens: 600,
     });
 
     // Determine trend from analysis text
@@ -84,19 +79,17 @@ function generateLocalAnalysis(
   const range = marketData.high - marketData.low;
   const position = range > 0 ? ((currentPrice - marketData.low) / range * 100).toFixed(0) : '50';
 
-  return `📊 Comprehensive Analysis for ${pair}
+  return `📊 ${pair} Analysis (${trend})
 
-🔷 Current Price: ${currentPrice}
-🔷 Trend: ${trend}
-🔷 Daily Range: ${marketData.low} - ${marketData.high}
-🔷 Price Position: ${position}% of daily range
+🔷 Price: ${currentPrice} | Range: ${marketData.low} - ${marketData.high}
+🔷 Position: ${position}% of daily range
 
 🕯️ Candlestick Analysis:
-Price is trading ${parseFloat(position) < 40 ? 'in the lower zone, indicating potential bullish reversal' : parseFloat(position) > 60 ? 'in the upper zone, indicating potential bearish correction' : 'near the middle, indicating indecision'}
+Price is ${parseFloat(position) < 40 ? 'in the lower zone - potential bullish reversal' : parseFloat(position) > 60 ? 'in the upper zone - potential bearish correction' : 'near middle - indecision'}
 
 🏦 ICT Analysis:
-${parseFloat(position) < 40 ? '✅ Price is in Discount zone - favorable environment for buying' : '⚠️ Price is in Premium zone - wait for correction'}
-💧 Liquidity: ${parseFloat(position) < 40 ? 'Sell Side Liquidity likely below the lows' : 'Buy Side Liquidity likely above the highs'}
+${parseFloat(position) < 40 ? '✅ Discount zone - favorable for buying' : '⚠️ Premium zone - wait for correction'}
+💧 Liquidity: ${parseFloat(position) < 40 ? 'Sell Side Liquidity below lows' : 'Buy Side Liquidity above highs'}
 
-💡 Recommendation: ${trend === 'Bullish' ? 'Look for buying opportunities at support' : trend === 'Bearish' ? 'Look for selling opportunities at resistance' : 'Wait for clear directional confirmation'}`;
+💡 Recommendation: ${trend === 'Bullish' ? 'Look for buy setups at support' : trend === 'Bearish' ? 'Look for sell setups at resistance' : 'Wait for clear directional confirmation'}`;
 }

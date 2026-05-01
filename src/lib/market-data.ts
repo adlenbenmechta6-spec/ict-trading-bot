@@ -151,12 +151,14 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
     if (!result) return getFallbackOHLCV(pair, timeframe);
 
     const meta = result.meta;
-    const timestamps = result.indicators?.quote?.[0]?.timestamp || [];
-    const opens = result.indicators?.quote?.[0]?.open || [];
-    const highs = result.indicators?.quote?.[0]?.high || [];
-    const lows = result.indicators?.quote?.[0]?.low || [];
-    const closes = result.indicators?.quote?.[0]?.close || [];
-    const volumes = result.indicators?.quote?.[0]?.volume || [];
+    // Timestamps are in result.timestamp, NOT in indicators.quote[0].timestamp
+    const timestamps: number[] = result.timestamp || [];
+    const quoteData = result.indicators?.quote?.[0] || {};
+    const opens: number[] = quoteData.open || [];
+    const highs: number[] = quoteData.high || [];
+    const lows: number[] = quoteData.low || [];
+    const closes: number[] = quoteData.close || [];
+    const volumes: number[] = quoteData.volume || [];
 
     const currentPrice = meta?.regularMarketPrice;
     if (!currentPrice || !isValidPrice(pair, currentPrice)) {

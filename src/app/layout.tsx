@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "ICT Pro Bot - Professional Trading Assistant",
-  description: "Professional technical analysis bot combining Japanese Candlesticks and ICT Smart Money with real-time market prices",
+  description: "Professional technical analysis bot combining Japanese Candlesticks and ICT Smart Money with live TradingView prices",
   keywords: ["trading", "candlesticks", "ICT", "signals", "technical analysis", "forex", "Smart Money"],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",

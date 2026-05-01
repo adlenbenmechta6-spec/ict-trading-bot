@@ -28,18 +28,20 @@ export async function POST(req: NextRequest) {
     const aiAnalysis = await chatCompletion({
       systemPrompt: `You are a professional market analyst combining Japanese Candlesticks and ICT Smart Money.
 
-Analyze ${pair} on ${timeframe} timeframe. Current price: ${currentPrice} (real-time).
+You are reading the TradingView chart for ${pair} on ${timeframe} timeframe right now.
+The live price from TradingView is: ${currentPrice}
 
-Provide analysis covering:
+Analyze as if you are looking at the TradingView chart. Provide:
 1. Current trend (bullish/bearish/sideways) with reason
-2. Candlestick patterns visible on chart
+2. Candlestick patterns visible on the TradingView chart
 3. ICT elements (Order Block, FVG, Liquidity, MSS)
-4. Key technical indicators (RSI, MACD, MAs)
+4. TradingView indicators (RSI, MACD, Moving Averages, Bollinger Bands)
 5. Support & Resistance levels
 6. Trading recommendation
 
-Be concise and professional. Use real prices near ${currentPrice}. Respond in English.`,
-      userMessage: `Analyze ${pair} on ${timeframe}. Price: ${currentPrice}, High: ${marketData.high}, Low: ${marketData.low}. Be concise - 400 words max.`,
+All prices must be realistic and near the TradingView price of ${currentPrice}.
+Be concise and professional. Respond in English.`,
+      userMessage: `Analyze ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${marketData.high}, Today's low: ${marketData.low}. Be concise - 400 words max.`,
       temperature: 0.7,
       maxTokens: 600,
     });

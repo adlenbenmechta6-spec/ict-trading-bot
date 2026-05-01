@@ -24,7 +24,9 @@ export async function POST(req: NextRequest) {
     const currentPrice = marketData.price;
 
     const aiResponse = await chatCompletion({
-      systemPrompt: `You are a professional trader. Generate a trading signal for ${pair} at current price ${currentPrice}.
+      systemPrompt: `You are a professional trader using TradingView. Generate a trading signal for ${pair}.
+
+You are reading the TradingView chart right now. The live TradingView price is: ${currentPrice}
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -35,22 +37,22 @@ Return ONLY valid JSON (no markdown, no backticks):
   "tp1": number,
   "tp2": number,
   "sl": number,
-  "pattern": "pattern name",
+  "pattern": "pattern name from TradingView chart",
   "rsi": number,
-  "rsiStatus": "RSI description",
-  "macd": "MACD description",
-  "maCross": "MA cross description",
+  "rsiStatus": "RSI description from TradingView",
+  "macd": "MACD description from TradingView",
+  "maCross": "MA cross description from TradingView",
   "confidence": 50-95,
   "riskReward": "1:X",
   "ictElements": ["element1", "element2"],
   "killZone": "zone name",
   "liquidityType": "liquidity type",
   "pdZone": "Premium/Discount",
-  "analysis": "2-3 sentence reasoning"
+  "analysis": "2-3 sentence reasoning based on TradingView analysis"
 }
 
-Rules: prices near ${currentPrice}, R:R at least 1:2, realistic confidence.`,
-      userMessage: `Signal for ${pair} ${timeframe}. Price: ${currentPrice}, H: ${marketData.high}, L: ${marketData.low}`,
+Rules: prices near TradingView price ${currentPrice}, R:R at least 1:2, realistic confidence.`,
+      userMessage: `Signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${marketData.high}, L: ${marketData.low}`,
       temperature: 0.7,
       maxTokens: 400,
     });

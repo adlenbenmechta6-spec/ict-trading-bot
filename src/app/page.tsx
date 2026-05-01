@@ -289,8 +289,8 @@ I combine two powerful methodologies:
 🕯️ Japanese Candlesticks (Fred K.H. Tam's book)
 🏦 ICT Smart Money (Ayub Rana's book)
 
-📊 My prices are real-time from the market
-🔍 I analyze as if I'm looking at a TradingView chart
+📊 My prices come directly from TradingView
+🔍 I analyze as if I'm reading a TradingView chart
 
 Use the buttons below or type your question!
 ⚠️ Trading involves risk — these are educational analyses`,
@@ -480,7 +480,7 @@ export default function Home() {
             <h1 className="text-white font-bold text-sm">ICT Pro Bot 🤖</h1>
             <div className="flex items-center gap-1.5">
               <span className="text-emerald-400 text-xs">Online</span>
-              <span className="text-gray-500 text-xs">• Real-time prices</span>
+              <span className="text-gray-500 text-xs">• TradingView prices</span>
             </div>
           </div>
         </div>
@@ -568,7 +568,7 @@ export default function Home() {
           </button>
         </div>
         <div className="flex items-center justify-between mt-1.5 px-1">
-          <span className="text-gray-500 text-xs">💡 Signal / Analyze / Scan Market | 🏦 ICT + 🕯️ Candlesticks | 📊 Real-time prices</span>
+          <span className="text-gray-500 text-xs">💡 Signal / Analyze / Scan Market | 🏦 ICT + 🕯️ Candlesticks | 📊 TradingView prices</span>
           <span className="text-gray-600 text-xs">⚠️ Educational only</span>
         </div>
       </div>

@@ -36,6 +36,11 @@ interface SignalData {
   confidence: number;
   riskReward: number;
   aiAnalysis?: string;
+  // ICT fields
+  ictElements?: string[];
+  killZone?: string;
+  liquidityType?: string;
+  pdZone?: string;
 }
 
 interface AnalysisData {
@@ -187,6 +192,31 @@ function SignalCard({ signal }: { signal: SignalData }) {
             <span className="text-white font-mono font-bold">1:{signal.riskReward}</span>
           </div>
         </div>
+
+        {/* ICT Elements */}
+        {signal.ictElements && signal.ictElements.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-white/10">
+            <div className="text-xs text-amber-400 font-semibold mb-1.5">🏦 عناصر ICT (Smart Money):</div>
+            <div className="flex flex-wrap gap-1">
+              {signal.ictElements.map((el, i) => (
+                <span key={i} className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-xs border border-amber-500/20">
+                  {el}
+                </span>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 mt-1.5 text-xs">
+              {signal.killZone && (
+                <span className="text-cyan-300">⏰ {signal.killZone}</span>
+              )}
+              {signal.liquidityType && (
+                <span className="text-pink-300">💧 {signal.liquidityType}</span>
+              )}
+              {signal.pdZone && (
+                <span className="text-violet-300">📐 {signal.pdZone}</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -439,7 +469,7 @@ const initialMessages: ChatMessage[] = [
   {
     id: generateId(),
     type: 'bot',
-    content: 'السلام عليكم! 👋 أنا بدل توقعات الذكي، بوت التحليل الفني المتخصص في الشموع اليابانية.\n\nأستطيع:\n🕯️ كشف أنماط الشموع اليابانية\n📊 تحليل المؤشرات التقنية\n📈 تقديم إشارات تداول\n🔍 مسح السوق للفرص\n\nاستخدم الأزرار في الأسفل أو اكتب سؤالك!',
+    content: 'السلام عليكم! 👋 أنا بدل توقعات الذكي، بوت التحليل الفني المتقدم.\n\nأجمع بين مدرستين قويتين:\n🕯️ الشموع اليابانية (كتاب فريد تام)\n🏦 ICT / Smart Money (كتاب أيوب رانا)\n\nأستطيع:\n📈 إشارات تداول مع تأكيدات ICT\n🕯️ كشف أنماط الشموع اليابانية\n🏦 كشف أوردر بلوك و FVG و بريكر\n💧 تحليل السيولة (BSL/SSL)\n⏰ تحديد الكيل زون\n🔍 مسح السوق للفرص\n\nاستخدم الأزرار في الأسفل أو اكتب سؤالك!',
     timestamp: new Date(Date.now() - 3600000 * 1.9),
   },
   {
@@ -461,14 +491,18 @@ const initialMessages: ChatMessage[] = [
       rsiStatus: 'تشبع بيعي (28)',
       macd: 'تقاطع صعودي',
       maCross: 'تقاطع ذهبي (MA5 > MA20)',
-      confidence: 85,
-      riskReward: 1.4,
+      confidence: 92,
+      riskReward: 2.5,
+      ictElements: ['أوردر بلوك صعودي', 'FVG صعودي', 'كنس SSL'],
+      killZone: 'كيل زون لندن',
+      liquidityType: 'Sell Side Liquidity',
+      pdZone: 'منطقة خصم (Discount)',
     },
   },
   {
     id: generateId(),
     type: 'bot',
-    content: '✅ تم تأكيد إشارة الشراء على الذهب - نمط الابتلاع الصعودي قوي مع تأكيد من RSI و MACD.\n\n⚠️ تذكر: استخدم إدارة المخاطر ولا تخاطر بأكثر من 2% من رأس مالك!',
+    content: '✅ تم تأكيد إشارة الشراء على الذهب - نمط الابتلاع الصعودي مدعوم بـ:\n🏦 أوردر بلوك صعودي + FVG صعودي\n💧 كنس سيولة جانب البيع (SSL)\n⏰ كيل زون لندن - توقيت مثالي\n📐 الدخول في منطقة خصم (Discount)\n\n⚠️ إدارة المخاطر: لا تخاطر بأكثر من 2% - نسبة R:R 1:3 حسب ICT',
     timestamp: new Date(Date.now() - 3500000),
   },
 ];
@@ -808,12 +842,30 @@ export default function Home() {
               </button>
               <button
                 onClick={() => {
-                  setInputValue('اشرح لي طرق ساكاتا الخمس');
+                  setInputValue('اشرح لي الأوردر بلوك وكيف أتداول به');
                 }}
                 disabled={isTyping}
-                className="flex items-center gap-1.5 bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed border border-orange-500/20"
+                className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed border border-amber-500/20"
               >
-                🏯 ساكاتا
+                🏦 أوردر بلوك
+              </button>
+              <button
+                onClick={() => {
+                  setInputValue('ما هي فجوة القيمة العادلة FVG وكيف أستخدمها؟');
+                }}
+                disabled={isTyping}
+                className="flex items-center gap-1.5 bg-pink-600/20 hover:bg-pink-600/30 text-pink-400 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed border border-pink-500/20"
+              >
+                💧 FVG
+              </button>
+              <button
+                onClick={() => {
+                  setInputValue('اشرح لي الكيل زون واستراتيجية سيلفر بوليت');
+                }}
+                disabled={isTyping}
+                className="flex items-center gap-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed border border-cyan-500/20"
+              >
+                ⏰ كيل زون
               </button>
             </div>
           </div>
@@ -840,7 +892,7 @@ export default function Home() {
               </button>
             </div>
             <div className="flex items-center justify-between mt-1.5 px-1">
-              <span className="text-gray-500 text-xs">💡 أوامر: /signal /analyze /scan</span>
+              <span className="text-gray-500 text-xs">💡 أوامر: /signal /analyze /scan | 🏦 ICT + 🕯️ شموع</span>
               <span className="text-gray-500 text-xs">⚠️ ليس نصيحة مالية</span>
             </div>
           </div>

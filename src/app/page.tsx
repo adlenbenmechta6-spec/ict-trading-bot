@@ -3,12 +3,59 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send, TrendingUp, BarChart3, Search, Bot, User, Zap, AlertTriangle, ChevronDown, RefreshCw,
+  Send, TrendingUp, BarChart3, Search, Bot, User, Zap, AlertTriangle, ChevronDown, RefreshCw, Clock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 // Dynamic import to avoid SSR issues with Canvas
 const TradingViewChart = dynamic(() => import('@/components/TradingViewChart'), { ssr: false });
+
+// ─── Trading Modes & Timeframes ─────────────────────────────────────
+type TradingMode = 'swing' | 'daytrading' | 'scalping';
+
+interface TradingModeConfig {
+  id: TradingMode;
+  label: string;
+  emoji: string;
+  description: string;
+  timeframes: string[];
+  defaultTF: string;
+  holdTime: string;
+  color: string;
+}
+
+const TRADING_MODES: TradingModeConfig[] = [
+  {
+    id: 'swing',
+    label: 'Swing Trading',
+    emoji: '📅',
+    description: 'Trades held 1-7 days. Best for busy people.',
+    timeframes: ['H4', 'D1'],
+    defaultTF: 'H4',
+    holdTime: '1-7 days',
+    color: 'emerald',
+  },
+  {
+    id: 'daytrading',
+    label: 'Day Trading',
+    emoji: '📊',
+    description: 'Trades closed same day. Requires screen time.',
+    timeframes: ['M15', 'M30', 'H1'],
+    defaultTF: 'M30',
+    holdTime: 'Minutes - Hours',
+    color: 'blue',
+  },
+  {
+    id: 'scalping',
+    label: 'Scalping',
+    emoji: '⚡',
+    description: 'Very fast trades. Advanced only.',
+    timeframes: ['M1', 'M5'],
+    defaultTF: 'M5',
+    holdTime: 'Seconds - Minutes',
+    color: 'orange',
+  },
+];
 
 // Types
 interface ChartData {
@@ -80,7 +127,8 @@ const TRADING_PAIRS = [
 ];
 
 // ─── Signal Card ─────────────────────────────────────────────────────
-function SignalCard({ signal }: { signal: SignalData }) {
+function SignalCard({ signal, mode }: { signal: SignalData; mode: TradingMode }) {
+  const modeConfig = TRADING_MODES.find(m => m.id === mode);
   return (
     <div className={`rounded-xl overflow-hidden border ${
       signal.type === 'BUY' ? 'border-emerald-500/30 bg-emerald-950/20' : 'border-red-500/30 bg-red-950/20'
@@ -94,7 +142,14 @@ function SignalCard({ signal }: { signal: SignalData }) {
             {signal.type === 'BUY' ? '🟢 BUY' : '🔴 SELL'}
           </span>
         </div>
-        <span className="text-xs text-gray-400 font-mono">{signal.timeframe}</span>
+        <div className="flex items-center gap-2">
+          {modeConfig && (
+            <span className={`text-xs px-2 py-0.5 rounded-full bg-${modeConfig.color}-500/20 text-${modeConfig.color}-300 border border-${modeConfig.color}-500/20`}>
+              {modeConfig.emoji} {modeConfig.label}
+            </span>
+          )}
+          <span className="text-xs text-gray-400 font-mono">{signal.timeframe}</span>
+        </div>
       </div>
       <div className="px-4 py-3 space-y-3">
         <div className="flex items-center justify-between">
@@ -227,7 +282,7 @@ function TypingIndicator() {
 }
 
 // ─── Message Bubble ──────────────────────────────────────────────────
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({ msg, mode }: { msg: ChatMessage; mode: TradingMode }) {
   if (msg.type === 'system') {
     return (
       <div className="flex justify-center my-2">
@@ -247,7 +302,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             <span className="text-blue-400 text-sm font-semibold">ICT Pro Bot</span>
             <span className="text-gray-500 text-xs">{formatTime(msg.timestamp)}</span>
           </div>
-          <SignalCard signal={msg.signalData} />
+          <SignalCard signal={msg.signalData} mode={mode} />
         </div>
       </div>
     );
@@ -310,6 +365,97 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
+// ─── Mode Selector Component ─────────────────────────────────────────
+function ModeSelector({
+  mode, setMode, timeframe, setTimeframe, showModeMenu, setShowModeMenu,
+}: {
+  mode: TradingMode;
+  setMode: (m: TradingMode) => void;
+  timeframe: string;
+  setTimeframe: (tf: string) => void;
+  showModeMenu: boolean;
+  setShowModeMenu: (v: boolean) => void;
+}) {
+  const currentMode = TRADING_MODES.find(m => m.id === mode)!;
+  const modeColorMap: Record<string, string> = {
+    emerald: 'text-emerald-400 border-emerald-500/30 bg-emerald-600/20',
+    blue: 'text-blue-400 border-blue-500/30 bg-blue-600/20',
+    orange: 'text-orange-400 border-orange-500/30 bg-orange-600/20',
+  };
+  const modeBtnColor = modeColorMap[currentMode.color] || modeColorMap.emerald;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowModeMenu(!showModeMenu)}
+        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors border ${modeBtnColor}`}
+      >
+        <Clock className="w-3.5 h-3.5" />
+        <span className="font-semibold">{currentMode.emoji} {currentMode.label}</span>
+        <span className="text-xs opacity-70">({timeframe})</span>
+        <ChevronDown className="w-3.5 h-3.5" />
+      </button>
+      <AnimatePresence>
+        {showModeMenu && (
+          <motion.div
+            initial={{ opacity: 0, y: -5, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -5, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-full mt-1 bg-[#17212b] border border-white/10 rounded-xl shadow-2xl z-50 py-2 min-w-[260px]"
+          >
+            <div className="px-3 pb-2 mb-1 border-b border-white/5">
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Trading Style</span>
+            </div>
+            {TRADING_MODES.map(m => {
+              const isActive = mode === m.id;
+              const colors = modeColorMap[m.color];
+              return (
+                <div key={m.id}>
+                  <button
+                    onClick={() => {
+                      setMode(m.id);
+                      setTimeframe(m.defaultTF);
+                      setShowModeMenu(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 transition-colors ${isActive ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`font-semibold text-sm ${isActive ? colors.split(' ')[0] : 'text-gray-300'}`}>
+                        {m.emoji} {m.label}
+                      </span>
+                      {isActive && <span className="text-emerald-400 text-xs">✓ Active</span>}
+                    </div>
+                    <div className="text-gray-500 text-xs mt-0.5">{m.description}</div>
+                    <div className="text-gray-600 text-xs mt-0.5">⏱ Hold: {m.holdTime} • TF: {m.timeframes.join(', ')}</div>
+                  </button>
+                  {isActive && (
+                    <div className="px-3 py-1.5 flex gap-1.5">
+                      {m.timeframes.map(tf => (
+                        <button
+                          key={tf}
+                          onClick={(e) => { e.stopPropagation(); setTimeframe(tf); }}
+                          className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition-colors ${
+                            timeframe === tf
+                              ? colors
+                              : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                          }`}
+                        >
+                          {tf}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ─── Initial Messages ────────────────────────────────────────────────
 const initialMessages: ChatMessage[] = [
   {
@@ -330,7 +476,11 @@ I combine two powerful methodologies:
 📊 My prices come directly from TradingView
 🔍 I analyze as if I'm reading a TradingView chart
 
-Use the buttons below or type your question!
+📅 Swing Trading — H4/D1 (1-7 days)
+📊 Day Trading — M15/M30/H1 (same day)
+⚡ Scalping — M1/M5 (seconds-minutes)
+
+Choose your style in the header, then use the buttons below!
 ⚠️ Trading involves risk — these are educational analyses`,
     timestamp: new Date(Date.now() - 60000),
   },
@@ -343,11 +493,24 @@ export default function Home() {
   const [isTyping, setIsTyping] = useState(false);
   const [showPairSelector, setShowPairSelector] = useState(false);
   const [selectedPair, setSelectedPair] = useState('XAU/USD');
+  const [tradingMode, setTradingMode] = useState<TradingMode>('swing');
+  const [selectedTimeframe, setSelectedTimeframe] = useState('H4');
+  const [showModeMenu, setShowModeMenu] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClick = () => {
+      setShowPairSelector(false);
+      setShowModeMenu(false);
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 
   const addMessage = useCallback((msg: Omit<ChatMessage, 'id' | 'timestamp'>) => {
     const newMsg: ChatMessage = { ...msg, id: generateId(), timestamp: new Date() };
@@ -364,7 +527,8 @@ export default function Home() {
   // Get signal
   const handleGetSignal = useCallback(async (pair?: string) => {
     const targetPair = pair || selectedPair;
-    addMessage({ type: 'user', content: `📊 Give me a signal for ${targetPair}` });
+    const modeLabel = TRADING_MODES.find(m => m.id === tradingMode)?.label || 'Swing';
+    addMessage({ type: 'user', content: `📊 Give me a ${modeLabel} signal for ${targetPair} (${selectedTimeframe})` });
     simulateTyping(async () => {
       try {
         const controller = new AbortController();
@@ -372,13 +536,12 @@ export default function Home() {
         const res = await fetch('/api/trading/signal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pair: targetPair, timeframe: 'H4' }),
+          body: JSON.stringify({ pair: targetPair, timeframe: selectedTimeframe, mode: tradingMode }),
           signal: controller.signal,
         });
         clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.signal) {
-          // Use chart data from the API response directly
           addMessage({ type: 'signal', content: '', signalData: data.signal });
         } else {
           addMessage({ type: 'bot', content: `❌ ${data.error || 'Could not generate a signal. Please try again.'}` });
@@ -391,12 +554,13 @@ export default function Home() {
         }
       }
     }, 1000, 2000);
-  }, [selectedPair, addMessage, simulateTyping]);
+  }, [selectedPair, selectedTimeframe, tradingMode, addMessage, simulateTyping]);
 
   // Analyze pair
   const handleAnalyze = useCallback(async (pair?: string) => {
     const targetPair = pair || selectedPair;
-    addMessage({ type: 'user', content: `🔍 Analyze ${targetPair}` });
+    const modeLabel = TRADING_MODES.find(m => m.id === tradingMode)?.label || 'Swing';
+    addMessage({ type: 'user', content: `🔍 ${modeLabel} analysis for ${targetPair} (${selectedTimeframe})` });
     simulateTyping(async () => {
       try {
         const controller = new AbortController();
@@ -404,13 +568,12 @@ export default function Home() {
         const res = await fetch('/api/trading/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pair: targetPair, timeframe: 'H4' }),
+          body: JSON.stringify({ pair: targetPair, timeframe: selectedTimeframe, mode: tradingMode }),
           signal: controller.signal,
         });
         clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.aiAnalysis) {
-          // Use chart data from the API response
           const chartData: ChartData | undefined = data.chartData;
           addMessage({ type: 'analysis', content: data.aiAnalysis, chartData });
         } else {
@@ -424,7 +587,7 @@ export default function Home() {
         }
       }
     }, 1000, 2000);
-  }, [selectedPair, addMessage, simulateTyping]);
+  }, [selectedPair, selectedTimeframe, tradingMode, addMessage, simulateTyping]);
 
   // Market scan
   const handleScan = useCallback(async () => {
@@ -506,6 +669,8 @@ export default function Home() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
   };
 
+  const currentMode = TRADING_MODES.find(m => m.id === tradingMode)!;
+
   return (
     <div className="h-screen flex flex-col bg-[#0e1621]">
       {/* Header */}
@@ -526,9 +691,21 @@ export default function Home() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative">
+          {/* Mode Selector */}
+          <div onClick={(e) => e.stopPropagation()}>
+            <ModeSelector
+              mode={tradingMode}
+              setMode={setTradingMode}
+              timeframe={selectedTimeframe}
+              setTimeframe={setSelectedTimeframe}
+              showModeMenu={showModeMenu}
+              setShowModeMenu={setShowModeMenu}
+            />
+          </div>
+          {/* Pair Selector */}
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
             <button
-              onClick={() => setShowPairSelector(!showPairSelector)}
+              onClick={() => { setShowPairSelector(!showPairSelector); setShowModeMenu(false); }}
               className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 rounded-lg px-3 py-1.5 text-gray-300 text-sm transition-colors"
             >
               <span className="font-mono">{selectedPair}</span>
@@ -558,12 +735,31 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Mode Info Bar */}
+      <div className="flex-shrink-0 bg-[#0e1621]/80 px-4 py-1.5 flex items-center justify-between border-b border-white/5">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500 text-xs">Mode:</span>
+          <span className={`text-xs font-semibold ${
+            tradingMode === 'swing' ? 'text-emerald-400' : tradingMode === 'daytrading' ? 'text-blue-400' : 'text-orange-400'
+          }`}>
+            {currentMode.emoji} {currentMode.label}
+          </span>
+          <span className="text-gray-600 text-xs">|</span>
+          <span className="text-gray-500 text-xs">TF:</span>
+          <span className="text-white text-xs font-mono font-bold">{selectedTimeframe}</span>
+          <span className="text-gray-600 text-xs">|</span>
+          <span className="text-gray-500 text-xs">Hold:</span>
+          <span className="text-gray-400 text-xs">{currentMode.holdTime}</span>
+        </div>
+        <span className="text-gray-600 text-xs">{selectedPair}</span>
+      </div>
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#2b3a4a transparent' }}>
         <div className="flex justify-center my-3">
           <div className="bg-black/30 rounded-full px-3 py-1 text-xs text-gray-400">Today</div>
         </div>
-        {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
+        {messages.map(msg => <MessageBubble key={msg.id} msg={msg} mode={tradingMode} />)}
         <AnimatePresence>{isTyping && <TypingIndicator />}</AnimatePresence>
         <div ref={chatEndRef} />
       </div>

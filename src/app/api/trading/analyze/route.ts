@@ -7,7 +7,7 @@ export const maxDuration = 30;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { pair = 'EUR/USD', timeframe = 'H4' } = body;
+    const { pair = 'EUR/USD', timeframe = 'H4', mode = 'swing' } = body;
 
     const marketData = await fetchRealPrice(pair);
 
@@ -20,11 +20,16 @@ export async function POST(req: NextRequest) {
 
     const currentPrice = marketData.price;
 
+    // Mode-specific analysis label
+    const modeLabel = mode === 'scalping' ? 'Scalping' : mode === 'daytrading' ? 'Day Trading' : 'Swing Trading';
+
     const aiAnalysis = await chatCompletion({
       systemPrompt: `You are a professional market analyst combining Japanese Candlesticks and ICT Smart Money.
 
 You are reading the TradingView chart for ${pair} on ${timeframe} timeframe right now.
 The live price from TradingView is: ${currentPrice}
+
+This is a ${modeLabel} analysis on ${timeframe}.
 
 Analyze as if you are looking at the TradingView chart. Provide:
 1. Current trend (bullish/bearish/sideways) with reason
@@ -32,11 +37,13 @@ Analyze as if you are looking at the TradingView chart. Provide:
 3. ICT elements (Order Block, FVG, Liquidity, MSS)
 4. TradingView indicators (RSI, MACD, Moving Averages, Bollinger Bands)
 5. Support & Resistance levels
-6. Trading recommendation
+6. Trading recommendation appropriate for ${modeLabel}
+
+${mode === 'scalping' ? 'Focus on micro-level patterns and very tight levels. Quick in-and-out trades.' : mode === 'daytrading' ? 'Focus on intraday momentum. All positions should be closed before end of day.' : 'Focus on major structure and multi-day moves. Wider stops and targets.'}
 
 All prices must be realistic and near the TradingView price of ${currentPrice}.
 Be concise and professional. Respond in English.`,
-      userMessage: `Analyze ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${marketData.high}, Today's low: ${marketData.low}. Be concise - 400 words max.`,
+      userMessage: `${modeLabel} analysis for ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${marketData.high}, Today's low: ${marketData.low}. Be concise - 400 words max.`,
       temperature: 0.7,
       maxTokens: 600,
     });
@@ -55,7 +62,10 @@ Be concise and professional. Respond in English.`,
     const range = marketData.high - marketData.low;
     const position = range > 0 ? (currentPrice - marketData.low) / range : 0.5;
     const isBuy = trend === 'Bullish' || (trend === 'Sideways' && position < 0.4);
-    const atr = range > 0 ? range * 0.3 : currentPrice * 0.005;
+
+    // Adjust ATR multiplier based on mode
+    const atrMult = mode === 'scalping' ? 0.5 : mode === 'daytrading' ? 0.8 : 1.0;
+    const atr = (range > 0 ? range * 0.3 : currentPrice * 0.005) * atrMult;
 
     const chartData = {
       type: isBuy ? 'BUY' as const : 'SELL' as const,
@@ -63,7 +73,7 @@ Be concise and professional. Respond in English.`,
       tp1: isBuy ? currentPrice + atr * 2 : currentPrice - atr * 2,
       tp2: isBuy ? currentPrice + atr * 3.5 : currentPrice - atr * 3.5,
       sl: isBuy ? currentPrice - atr : currentPrice + atr,
-      confidence: isBuy ? 65 : 65,
+      confidence: 65,
       riskReward: '1:2.0',
       pattern: isBuy ? 'Bullish Setup' : 'Bearish Setup',
       killZone: '',
@@ -71,28 +81,6 @@ Be concise and professional. Respond in English.`,
       pdZone: isBuy ? 'Discount' : 'Premium',
       ictElements: [isBuy ? 'Bullish OB' : 'Bearish OB'],
     };
-
-    const chartParams = new URLSearchParams({
-      pair,
-      tf: timeframe,
-      price: currentPrice.toString(),
-      high: marketData.high.toString(),
-      low: marketData.low.toString(),
-      change: marketData.change.toString(),
-      changePct: marketData.changePercent.toString(),
-      type: chartData.type,
-      entry: chartData.entry.toString(),
-      tp1: chartData.tp1.toString(),
-      tp2: chartData.tp2.toString(),
-      sl: chartData.sl.toString(),
-      conf: chartData.confidence.toString(),
-      rr: chartData.riskReward,
-      pattern: chartData.pattern,
-      kz: chartData.killZone,
-      liq: chartData.liquidityType,
-      pd: chartData.pdZone,
-      ict: chartData.ictElements.join(','),
-    });
 
     return NextResponse.json({
       success: true,
@@ -103,7 +91,7 @@ Be concise and professional. Respond in English.`,
       high: marketData.high,
       low: marketData.low,
       changePercent: marketData.changePercent,
-      aiAnalysis: aiAnalysis || generateLocalAnalysis(pair, currentPrice, marketData, trend, timeframe),
+      aiAnalysis: aiAnalysis || generateLocalAnalysis(pair, currentPrice, marketData, trend, timeframe, mode),
       chartData: {
         pair,
         timeframe,
@@ -135,7 +123,7 @@ Be concise and professional. Respond in English.`,
 function generateLocalAnalysis(
   pair: string, currentPrice: number,
   marketData: { high: number; low: number; change: number; changePercent: number }, trend: string,
-  timeframe: string
+  timeframe: string, mode: string
 ): string {
   const range = marketData.high - marketData.low;
   const position = range > 0 ? ((currentPrice - marketData.low) / range * 100).toFixed(0) : '50';
@@ -149,6 +137,10 @@ function generateLocalAnalysis(
   else if (marketData.changePercent < -0.3) { detectedTrend = 'Bearish'; trendEmoji = '🔴'; }
   else if (posNum < 35) { detectedTrend = 'Potentially Bullish'; trendEmoji = '🟡'; }
   else if (posNum > 65) { detectedTrend = 'Potentially Bearish'; trendEmoji = '🟡'; }
+
+  // Mode label
+  const modeLabel = mode === 'scalping' ? '⚡ SCALPING' : mode === 'daytrading' ? '📊 DAY TRADING' : '📅 SWING TRADING';
+  const riskMax = mode === 'scalping' ? '0.5%' : mode === 'daytrading' ? '1%' : '2%';
 
   // Candlestick pattern detection based on price position
   let candlePattern = '';
@@ -171,9 +163,8 @@ function generateLocalAnalysis(
   }
 
   // ICT Analysis
-  let ictAnalysis = '';
   const isDiscount = posNum < 50;
-  ictAnalysis = `${isDiscount ? '✅ Discount Zone' : '⚠️ Premium Zone'} — Price is ${isDiscount ? 'in the lower 50% of the range, favorable for buying per ICT methodology' : 'in the upper 50% of the range, wait for correction to discount zone'}.
+  const ictAnalysis = `${isDiscount ? '✅ Discount Zone' : '⚠️ Premium Zone'} — Price is ${isDiscount ? 'in the lower 50% of the range, favorable for buying per ICT methodology' : 'in the upper 50% of the range, wait for correction to discount zone'}.
 
 🏦 Order Block: ${isDiscount ? 'Look for Bullish OB below current price — last bearish candle before the strong bullish move' : 'Look for Bearish OB above current price — last bullish candle before the strong bearish move'}
 💧 Fair Value Gap (FVG): ${posNum < 35 ? 'Bullish FVG likely below — price tends to return to fill the gap before continuing up' : posNum > 65 ? 'Bearish FVG likely above — price tends to return to fill the gap before continuing down' : 'Monitor for FVG formation on lower timeframes'}
@@ -185,14 +176,14 @@ function generateLocalAnalysis(
   const support2 = marketData.low;
   const resistance1 = currentPrice + range * 0.382;
   const resistance2 = marketData.high;
-  const fib61_8 = support1 - range * 0.236; // OTE zone
+  const fib61_8 = support1 - range * 0.236;
 
-  // Technical indicators simulation based on position
+  // Technical indicators
   const rsi = posNum < 30 ? Math.round(25 + posNum * 0.3) : posNum > 70 ? Math.round(60 + posNum * 0.3) : Math.round(35 + posNum * 0.4);
   const macdSignal = posNum < 40 ? 'Bullish crossover forming — MACD line crossing above signal line' : posNum > 60 ? 'Bearish crossover forming — MACD line crossing below signal line' : 'MACD converging — no clear signal yet';
   const maSignal = posNum < 35 ? 'Golden Cross potential — MA5 crossing above MA20' : posNum > 65 ? 'Death Cross potential — MA5 crossing below MA20' : 'Moving Averages flat — no clear trend';
 
-  return `📊 ${pair} Analysis — ${timeframe} Timeframe
+  return `📊 ${pair} Analysis — ${timeframe} Timeframe — ${modeLabel}
 ${trendEmoji} Trend: ${detectedTrend} (${marketData.changePercent >= 0 ? '+' : ''}${marketData.changePercent.toFixed(2)}%)
 
 🔷 Live Price: ${currentPrice.toFixed(decimals)} | Day Range: ${marketData.low.toFixed(decimals)} — ${marketData.high.toFixed(decimals)}
@@ -217,8 +208,8 @@ Resistance 1: ${resistance1.toFixed(decimals)} (38.2% Fib)
 Resistance 2: ${resistance2.toFixed(decimals)} (Daily High)
 OTE Zone: ${fib61_8.toFixed(decimals)} (61.8%-79% Fib — Optimal Trade Entry)
 
-━━━ 💡 Recommendation ━━━
+━━━ 💡 ${modeLabel} Recommendation ━━━
 ${detectedTrend.includes('Bullish') ? `🟢 Look for BUY setups at support levels. Best entry in OTE zone (${fib61_8.toFixed(decimals)}). Wait for MSS + FVG confirmation.` : detectedTrend.includes('Bearish') ? `🔴 Look for SELL setups at resistance levels. Best entry in OTE zone (${resistance1.toFixed(decimals)}-${resistance2.toFixed(decimals)}). Wait for MSS + FVG confirmation.` : `⏳ Wait for clear directional confirmation. Watch for liquidity sweep + MSS + FVG before entering.`}
 
-⚠️ Risk max 2% per trade. R:R minimum 1:2. This is educational analysis only.`;
+⚠️ ${modeLabel} risk max ${riskMax} per trade. R:R minimum 1:2. This is educational analysis only.`;
 }

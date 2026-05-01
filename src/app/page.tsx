@@ -12,10 +12,6 @@ import {
   Zap,
   AlertTriangle,
   ChevronDown,
-  X,
-  Maximize2,
-  Minimize2,
-  RefreshCw,
 } from 'lucide-react';
 
 // Types
@@ -469,7 +465,7 @@ const initialMessages: ChatMessage[] = [
   {
     id: generateId(),
     type: 'bot',
-    content: 'السلام عليكم! 👋 أنا بدل توقعات الذكي، بوت التحليل الفني المتقدم.\n\nأجمع بين مدرستين قويتين:\n🕯️ الشموع اليابانية (كتاب فريد تام)\n🏦 ICT / Smart Money (كتاب أيوب رانا)\n\nأستطيع:\n📈 إشارات تداول مع تأكيدات ICT\n🕯️ كشف أنماط الشموع اليابانية\n🏦 كشف أوردر بلوك و FVG و بريكر\n💧 تحليل السيولة (BSL/SSL)\n⏰ تحديد الكيل زون\n🔍 مسح السوق للفرص\n\nاستخدم الأزرار في الأسفل أو اكتب سؤالك!',
+    content: 'السلام عليكم! 👋 أنا بدل توقعات الذكي، بوت التحليل الفني المتقدم.\n\nأجمع بين مدرستين قويتين:\n🕯️ الشموع اليابانية (كتاب فريد تام)\n🏦 ICT / Smart Money (كتاب أيوب رانا)\n\nأستخدم TradingView للتحليل الفني:\n📊 RSI, MACD, MA, Bollinger, Stochastic\n🏦 Order Block + FVG + Breaker indicators\n📐 Fibonacci Retracement + OTE\n\nأستطيع:\n📈 إشارات تداول مع تأكيدات ICT\n🕯️ كشف أنماط الشموع اليابانية\n🏦 كشف أوردر بلوك و FVG و بريكر\n💧 تحليل السيولة (BSL/SSL)\n⏰ تحديد الكيل زون\n🔍 مسح السوق للفرص\n\nاستخدم الأزرار في الأسفل أو اكتب سؤالك!',
     timestamp: new Date(Date.now() - 3600000 * 1.9),
   },
   {
@@ -514,8 +510,6 @@ export default function Home() {
   const [isTyping, setIsTyping] = useState(false);
   const [showPairSelector, setShowPairSelector] = useState(false);
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
-  const [chartExpanded, setChartExpanded] = useState(false);
-  const [chartSymbol, setChartSymbol] = useState('EURUSD');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -570,8 +564,6 @@ export default function Home() {
               content: data.signal.aiAnalysis,
             });
           }
-          const tvSymbol = targetPair.replace('/', '');
-          setChartSymbol(tvSymbol);
         } else {
           addMessage({
             type: 'bot',
@@ -607,8 +599,6 @@ export default function Home() {
             content: data.aiAnalysis || 'تم التحليل بنجاح',
             analysisData: data,
           });
-          const tvSymbol = targetPair.replace('/', '');
-          setChartSymbol(tvSymbol);
         } else {
           addMessage({
             type: 'bot',
@@ -717,8 +707,6 @@ export default function Home() {
     }
   };
 
-  const tradingViewUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview&symbol=FX:${chartSymbol}&interval=240&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=0e1621&studies=%5B%5D&theme=dark&style=1&timezone=Asia/Riyadh&withdateranges=1&showpopupbutton=0&studies_overrides=%7B%7D&overrides=%7B%22mainSeriesProperties.candleStyle.upColor%22%3A%22%2326a69a%22%2C%22mainSeriesProperties.candleStyle.downColor%22%3A%22%23ef5350%22%2C%22mainSeriesProperties.candleStyle.borderUpColor%22%3A%22%2326a69a%22%2C%22mainSeriesProperties.candleStyle.borderDownColor%22%3A%22%23ef5350%22%2C%22mainSeriesProperties.candleStyle.wickUpColor%22%3A%22%2326a69a%22%2C%22mainSeriesProperties.candleStyle.wickDownColor%22%3A%22%23ef5350%22%2C%22paneProperties.background%22%3A%22%230e1621%22%2C%22paneProperties.backgroundType%22%3A1%7D&enabled_features=%5B%5D&disabled_features=%5B%22header_symbol_search%22%2C%22header_compare%22%2C%22header_interval_dialog_button%22%2C%22show_dom_first_time%22%5D`;
-
   return (
     <div className="h-screen flex flex-col bg-[#0e1621]" dir="rtl">
       {/* Header */}
@@ -762,7 +750,6 @@ export default function Home() {
                       key={pair}
                       onClick={() => {
                         setSelectedPair(pair);
-                        setChartSymbol(pair.replace('/', ''));
                         setShowPairSelector(false);
                       }}
                       className={`w-full text-right px-3 py-1.5 text-sm hover:bg-white/5 transition-colors ${
@@ -779,10 +766,8 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Content - Full width chat */}
+      <div className="flex-1 flex flex-col overflow-hidden">
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#2b3a4a transparent' }}>
             {/* Date separator */}
@@ -897,107 +882,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-
-        {/* Chart Panel - Hidden on mobile, visible on lg+ */}
-        <div className={`hidden lg:flex flex-col border-r border-white/5 bg-[#0e1621] ${
-          chartExpanded ? 'w-[600px]' : 'w-[420px]'
-        } transition-all duration-300`}>
-          {/* Chart Header */}
-          <div className="flex-shrink-0 px-3 py-2 bg-[#17212b] border-b border-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-blue-400" />
-              <span className="text-white text-sm font-semibold">{selectedPair}</span>
-              <span className="text-gray-500 text-xs">TradingView</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setChartSymbol(selectedPair.replace('/', ''))}
-                className="p-1 hover:bg-white/5 rounded text-gray-400 hover:text-white transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setChartExpanded(!chartExpanded)}
-                className="p-1 hover:bg-white/5 rounded text-gray-400 hover:text-white transition-colors"
-              >
-                {chartExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-
-          {/* TradingView Widget */}
-          <div className="flex-1 relative">
-            <iframe
-              key={chartSymbol}
-              src={tradingViewUrl}
-              className="w-full h-full border-0"
-              allowFullScreen
-              title="TradingView Chart"
-            />
-          </div>
-
-          {/* Quick pair switcher at bottom of chart */}
-          <div className="flex-shrink-0 px-2 py-2 bg-[#17212b] border-t border-white/5 flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-            {TRADING_PAIRS.slice(0, 6).map(pair => (
-              <button
-                key={pair}
-                onClick={() => {
-                  setSelectedPair(pair);
-                  setChartSymbol(pair.replace('/', ''));
-                }}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${
-                  pair === selectedPair
-                    ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-transparent'
-                }`}
-              >
-                {pair}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Chart Toggle */}
-      <div className="lg:hidden flex-shrink-0 bg-[#17212b] border-t border-white/5">
-        <button
-          onClick={() => setChartExpanded(!chartExpanded)}
-          className="w-full flex items-center justify-center gap-2 py-2.5 text-gray-400 hover:text-white transition-colors"
-        >
-          <BarChart3 className="w-4 h-4" />
-          <span className="text-sm">{chartExpanded ? 'إخفاء الرسم البياني' : 'عرض الرسم البياني'}</span>
-        </button>
-      </div>
-
-      {/* Mobile Chart Overlay */}
-      <AnimatePresence>
-        {chartExpanded && (
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: '50vh' }}
-            exit={{ height: 0 }}
-            className="lg:hidden bg-[#0e1621] border-t border-white/10 overflow-hidden"
-          >
-            <div className="h-full relative">
-              <div className="absolute top-2 right-2 z-10">
-                <button
-                  onClick={() => setChartExpanded(false)}
-                  className="p-1.5 bg-black/50 rounded-full text-white hover:bg-black/70 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <iframe
-                key={`mobile-${chartSymbol}`}
-                src={tradingViewUrl}
-                className="w-full h-full border-0"
-                allowFullScreen
-                title="TradingView Chart Mobile"
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Risk Warning Footer */}
       <div className="flex-shrink-0 bg-[#0d1117] px-4 py-1 text-center">

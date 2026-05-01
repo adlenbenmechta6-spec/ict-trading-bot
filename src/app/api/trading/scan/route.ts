@@ -1,38 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ICT_SCAN_SYSTEM_PROMPT, ICT_KNOWLEDGE } from '@/lib/ict-knowledge';
+import { CANDLESTICK_KNOWLEDGE, PAIRS } from '@/lib/trading-knowledge';
 import { chatCompletion } from '@/lib/ai';
-import { fetchRealPrice } from '@/lib/market-data';
+import { fetchMultiplePrices } from '@/lib/market-data';
 
 export const maxDuration = 30;
 
-// Only scan the top 5 most popular pairs to keep it fast
-const SCAN_PAIRS = [
-  { symbol: 'EUR/USD', name: 'Euro/Dollar', category: 'Forex' },
-  { symbol: 'GBP/USD', name: 'Pound/Dollar', category: 'Forex' },
-  { symbol: 'XAU/USD', name: 'Gold/Dollar', category: 'Metals' },
-  { symbol: 'BTC/USD', name: 'Bitcoin/Dollar', category: 'Crypto' },
-  { symbol: 'NAS100', name: 'NASDAQ', category: 'Indices' },
-];
-
 export async function POST(req: NextRequest) {
   try {
-    // Fetch prices for top 5 pairs only - with timeout
-    const pricePromises = SCAN_PAIRS.map(async (p) => {
-      try {
-        const data = await fetchRealPrice(p.symbol);
-        return { ...p, price: data.price, high: data.high, low: data.low, source: data.source };
-      } catch {
-        return null;
-      }
-    });
+    const pairsToScan = PAIRS.map(p => p.symbol);
 
-    const priceResults = await Promise.allSettled(pricePromises);
+    // Fetch REAL prices for all pairs
+    const prices = await fetchMultiplePrices(pairsToScan);
 
-    // Filter valid prices
-    const validPairs = priceResults
-      .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<typeof pricePromises[0]>>> =>
-        r.status === 'fulfilled' && r.value !== null && r.value.price > 0
-      )
-      .map(r => r.value);
+    // Filter pairs with valid prices
+    const validPairs = Object.entries(prices)
+      .filter(([_, data]) => data.price > 0)
+      .map(([pair, data]) => ({
+        pair,
+        price: data.price,
+        high: data.high,
+        low: data.low,
+        name: PAIRS.find(p => p.symbol === pair)?.name || pair,
+        category: PAIRS.find(p => p.symbol === pair)?.category || 'Other',
+      }));
 
     if (validPairs.length === 0) {
       return NextResponse.json({
@@ -46,17 +37,11 @@ export async function POST(req: NextRequest) {
       .map(p => `${p.pair}: ${p.price} (${p.low}-${p.high})`)
       .join(' | ');
 
-    // Try AI summary with short timeout
-    let aiSummary: string | null = null;
-    try {
-      aiSummary = await chatCompletion({
-        systemPrompt: `You are a market scanner using TradingView. Given real prices, identify the top 3 trading opportunities. Be concise - 100 words max. Respond in English.`,
-        userMessage: `Scan: ${summaryData}. Top 3 opportunities?`,
-        maxTokens: 200,
-      });
-    } catch {
-      // AI summary failed, use fallback
-    }
+    const aiSummary = await chatCompletion({
+      systemPrompt: `You are a market scanner. Given real prices, identify the top 3 trading opportunities. Be concise - 150 words max. Respond in English.`,
+      userMessage: `Scan: ${summaryData}. Top 3 opportunities?`,
+      maxTokens: 300,
+    });
 
     // Score pairs
     const results = validPairs.map(p => {

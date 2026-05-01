@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ICT_SIGNAL_SYSTEM_PROMPT, ICT_KNOWLEDGE } from '@/lib/ict-knowledge';
+import { CANDLESTICK_KNOWLEDGE } from '@/lib/trading-knowledge';
 import { chatCompletion } from '@/lib/ai';
 import { fetchRealPrice } from '@/lib/market-data';
 
@@ -9,12 +11,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { pair = 'EUR/USD', timeframe = 'H4' } = body;
 
-    // Fetch REAL price with timeout
-    const pricePromise = fetchRealPrice(pair);
-    const priceTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
-    const marketData = await Promise.race([pricePromise, priceTimeout]);
+    // Fetch REAL price
+    const marketData = await fetchRealPrice(pair);
 
-    if (!marketData || marketData.price === 0) {
+    if (marketData.price === 0) {
       return NextResponse.json({
         success: false,
         error: `Could not fetch the current price for ${pair}. Please try again.`,
@@ -23,11 +23,8 @@ export async function POST(req: NextRequest) {
 
     const currentPrice = marketData.price;
 
-    // Try AI signal generation with timeout
-    let signal = null;
-    try {
-      const aiPromise = chatCompletion({
-        systemPrompt: `You are a professional trader using TradingView. Generate a trading signal for ${pair}.
+    const aiResponse = await chatCompletion({
+      systemPrompt: `You are a professional trader using TradingView. Generate a trading signal for ${pair}.
 
 You are reading the TradingView chart right now. The live TradingView price is: ${currentPrice}
 
@@ -55,34 +52,31 @@ Return ONLY valid JSON (no markdown, no backticks):
 }
 
 Rules: prices near TradingView price ${currentPrice}, R:R at least 1:2, realistic confidence.`,
-        userMessage: `Signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${marketData.high}, L: ${marketData.low}`,
-        temperature: 0.7,
-        maxTokens: 400,
-      });
+      userMessage: `Signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${marketData.high}, L: ${marketData.low}`,
+      temperature: 0.7,
+      maxTokens: 400,
+    });
 
-      const aiTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
-      const aiResponse = await Promise.race([aiPromise, aiTimeout]);
-
-      if (aiResponse) {
-        try {
-          let cleaned = aiResponse.trim();
-          if (cleaned.startsWith('```')) {
-            cleaned = cleaned.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '');
-          }
-          signal = JSON.parse(cleaned);
-        } catch {
-          // JSON parse failed, use fallback
+    if (aiResponse) {
+      try {
+        let cleaned = aiResponse.trim();
+        if (cleaned.startsWith('```')) {
+          cleaned = cleaned.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '');
         }
+        const signal = JSON.parse(cleaned);
+        return NextResponse.json({ success: true, signal });
+      } catch {
+        return NextResponse.json({
+          success: true,
+          signal: generateFallbackSignal(pair, timeframe, currentPrice, marketData, aiResponse),
+        });
       }
-    } catch {
-      // AI signal failed, use fallback
     }
 
-    if (!signal) {
-      signal = generateFallbackSignal(pair, timeframe, currentPrice, marketData, null);
-    }
-
-    return NextResponse.json({ success: true, signal });
+    return NextResponse.json({
+      success: true,
+      signal: generateFallbackSignal(pair, timeframe, currentPrice, marketData, null),
+    });
   } catch (error) {
     console.error('Signal generation error:', error);
     return NextResponse.json({ success: false, error: 'Failed to generate signal. Please try again.' }, { status: 500 });

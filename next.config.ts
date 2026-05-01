@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
     ".space-z.ai",
     ".space.chatglm.site",
   ],
+  // Vercel-compatible settings
+  serverExternalPackages: ['z-ai-web-dev-sdk'],
 };
 
 export default nextConfig;

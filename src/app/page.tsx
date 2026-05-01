@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send, TrendingUp, BarChart3, Search, Bot, User, Zap, AlertTriangle, ChevronDown, RefreshCw, Clock,
+  Send, TrendingUp, BarChart3, Search, Bot, User, Zap, AlertTriangle, ChevronDown, Clock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -16,44 +16,44 @@ type TradingMode = 'swing' | 'daytrading' | 'scalping';
 interface TradingModeConfig {
   id: TradingMode;
   label: string;
+  shortLabel: string;
   emoji: string;
   description: string;
   timeframes: string[];
   defaultTF: string;
   holdTime: string;
-  color: string;
 }
 
 const TRADING_MODES: TradingModeConfig[] = [
   {
     id: 'swing',
     label: 'Swing Trading',
+    shortLabel: 'Swing',
     emoji: '📅',
-    description: 'Trades held 1-7 days. Best for busy people.',
+    description: '1-7 days',
     timeframes: ['H4', 'D1'],
     defaultTF: 'H4',
     holdTime: '1-7 days',
-    color: 'emerald',
   },
   {
     id: 'daytrading',
     label: 'Day Trading',
+    shortLabel: 'Day',
     emoji: '📊',
-    description: 'Trades closed same day. Requires screen time.',
+    description: 'Same day',
     timeframes: ['M15', 'M30', 'H1'],
     defaultTF: 'M30',
-    holdTime: 'Minutes - Hours',
-    color: 'blue',
+    holdTime: 'Min - Hours',
   },
   {
     id: 'scalping',
     label: 'Scalping',
+    shortLabel: 'Scalp',
     emoji: '⚡',
-    description: 'Very fast trades. Advanced only.',
+    description: 'Advanced',
     timeframes: ['M1', 'M5'],
     defaultTF: 'M5',
-    holdTime: 'Seconds - Minutes',
-    color: 'orange',
+    holdTime: 'Sec - Min',
   },
 ];
 
@@ -77,6 +77,7 @@ interface ChartData {
   pdZone: string;
   ictElements: string[];
   changePercent: number;
+  candles?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>;
 }
 
 interface SignalData {
@@ -126,29 +127,11 @@ const TRADING_PAIRS = [
   'US30', 'NAS100', 'GBP/JPY', 'AUD/USD',
 ];
 
-// ─── Mode Badge Colors (static Tailwind classes) ────────────────────
+// Mode badge colors for SignalCard
 const MODE_BADGE: Record<TradingMode, string> = {
   swing: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/20',
   daytrading: 'bg-blue-500/20 text-blue-300 border-blue-500/20',
   scalping: 'bg-orange-500/20 text-orange-300 border-orange-500/20',
-};
-
-const MODE_BTN: Record<TradingMode, string> = {
-  swing: 'text-emerald-400 border-emerald-500/30 bg-emerald-600/20',
-  daytrading: 'text-blue-400 border-blue-500/30 bg-blue-600/20',
-  scalping: 'text-orange-400 border-orange-500/30 bg-orange-600/20',
-};
-
-const MODE_TEXT: Record<TradingMode, string> = {
-  swing: 'text-emerald-400',
-  daytrading: 'text-blue-400',
-  scalping: 'text-orange-400',
-};
-
-const MODE_INFO: Record<TradingMode, string> = {
-  swing: 'text-emerald-400',
-  daytrading: 'text-blue-400',
-  scalping: 'text-orange-400',
 };
 
 // ─── Signal Card ─────────────────────────────────────────────────────
@@ -387,91 +370,6 @@ function MessageBubble({ msg, mode }: { msg: ChatMessage; mode: TradingMode }) {
   );
 }
 
-// ─── Mode Selector Component ─────────────────────────────────────────
-function ModeSelector({
-  mode, setMode, timeframe, setTimeframe, showModeMenu, setShowModeMenu,
-}: {
-  mode: TradingMode;
-  setMode: (m: TradingMode) => void;
-  timeframe: string;
-  setTimeframe: (tf: string) => void;
-  showModeMenu: boolean;
-  setShowModeMenu: (v: boolean) => void;
-}) {
-  const currentMode = TRADING_MODES.find(m => m.id === mode)!;
-
-  return (
-    <div className="relative" onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={(e) => { e.stopPropagation(); setShowModeMenu(!showModeMenu); }}
-        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors border ${MODE_BTN[mode]}`}
-      >
-        <Clock className="w-3.5 h-3.5" />
-        <span className="font-semibold">{currentMode.emoji} {currentMode.label}</span>
-        <span className="text-xs opacity-70">({timeframe})</span>
-        <ChevronDown className="w-3.5 h-3.5" />
-      </button>
-      <AnimatePresence>
-        {showModeMenu && (
-          <motion.div
-            initial={{ opacity: 0, y: -5, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -5, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
-            className="absolute right-0 top-full mt-1 bg-[#17212b] border border-white/10 rounded-xl shadow-2xl z-50 py-2 min-w-[260px]"
-          >
-            <div className="px-3 pb-2 mb-1 border-b border-white/5">
-              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Trading Style</span>
-            </div>
-            {TRADING_MODES.map(m => {
-              const isActive = mode === m.id;
-              return (
-                <div key={m.id}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMode(m.id);
-                      setTimeframe(m.defaultTF);
-                      setShowModeMenu(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 transition-colors ${isActive ? 'bg-white/10' : 'hover:bg-white/5'}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={`font-semibold text-sm ${isActive ? MODE_TEXT[m.id] : 'text-gray-300'}`}>
-                        {m.emoji} {m.label}
-                      </span>
-                      {isActive && <span className="text-emerald-400 text-xs">✓ Active</span>}
-                    </div>
-                    <div className="text-gray-500 text-xs mt-0.5">{m.description}</div>
-                    <div className="text-gray-600 text-xs mt-0.5">⏱ Hold: {m.holdTime} • TF: {m.timeframes.join(', ')}</div>
-                  </button>
-                  {isActive && (
-                    <div className="px-3 py-1.5 flex gap-1.5">
-                      {m.timeframes.map(tf => (
-                        <button
-                          key={tf}
-                          onClick={(e) => { e.stopPropagation(); setTimeframe(tf); }}
-                          className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition-colors ${
-                            timeframe === tf
-                              ? MODE_BTN[m.id]
-                              : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                          }`}
-                        >
-                          {tf}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 // ─── Initial Messages ────────────────────────────────────────────────
 const initialMessages: ChatMessage[] = [
   {
@@ -511,21 +409,29 @@ export default function Home() {
   const [selectedPair, setSelectedPair] = useState('XAU/USD');
   const [tradingMode, setTradingMode] = useState<TradingMode>('swing');
   const [selectedTimeframe, setSelectedTimeframe] = useState('H4');
-  const [showModeMenu, setShowModeMenu] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // Close menus when clicking outside
+  // Close pair selector when clicking outside
   useEffect(() => {
-    const handleClick = () => {
-      setShowPairSelector(false);
-      setShowModeMenu(false);
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-pair-selector]')) {
+        setShowPairSelector(false);
+      }
     };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
+  }, []);
+
+  // When mode changes, reset timeframe to default
+  const handleModeChange = useCallback((newMode: TradingMode) => {
+    const modeConfig = TRADING_MODES.find(m => m.id === newMode)!;
+    setTradingMode(newMode);
+    setSelectedTimeframe(modeConfig.defaultTF);
   }, []);
 
   const addMessage = useCallback((msg: Omit<ChatMessage, 'id' | 'timestamp'>) => {
@@ -687,44 +593,56 @@ export default function Home() {
 
   const currentMode = TRADING_MODES.find(m => m.id === tradingMode)!;
 
+  // Mode button styles
+  const getModeBtnClass = (modeId: TradingMode, isActive: boolean) => {
+    const base = 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border whitespace-nowrap';
+    if (!isActive) return `${base} bg-white/5 text-gray-400 border-white/10 hover:bg-white/10`;
+    switch (modeId) {
+      case 'swing': return `${base} bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-lg shadow-emerald-500/10`;
+      case 'daytrading': return `${base} bg-blue-600/30 text-blue-300 border-blue-500/40 shadow-lg shadow-blue-500/10`;
+      case 'scalping': return `${base} bg-orange-600/30 text-orange-300 border-orange-500/40 shadow-lg shadow-orange-500/10`;
+    }
+  };
+
+  // Timeframe button styles
+  const getTfBtnClass = (tf: string, isActive: boolean) => {
+    const base = 'px-2.5 py-1 rounded-md text-xs font-mono font-bold transition-all cursor-pointer';
+    if (!isActive) return `${base} bg-white/5 text-gray-400 hover:bg-white/10`;
+    switch (tradingMode) {
+      case 'swing': return `${base} bg-emerald-600/40 text-emerald-300`;
+      case 'daytrading': return `${base} bg-blue-600/40 text-blue-300`;
+      case 'scalping': return `${base} bg-orange-600/40 text-orange-300`;
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-[#0e1621]">
       {/* Header */}
-      <header className="flex-shrink-0 bg-[#17212b] border-b border-white/5 px-4 py-2.5 flex items-center justify-between z-20">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <Bot className="w-6 h-6 text-white" />
+      <header className="flex-shrink-0 bg-[#17212b] border-b border-white/5 px-3 py-2 z-20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="relative">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                <Bot className="w-5 h-5 text-white" />
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-[#17212b]" />
             </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-[#17212b]" />
-          </div>
-          <div>
-            <h1 className="text-white font-bold text-sm">ICT Pro Bot 🤖</h1>
-            <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400 text-xs">Online</span>
-              <span className="text-gray-500 text-xs">• TradingView prices</span>
+            <div>
+              <h1 className="text-white font-bold text-sm">ICT Pro Bot 🤖</h1>
+              <div className="flex items-center gap-1.5">
+                <span className="text-emerald-400 text-xs">Online</span>
+                <span className="text-gray-500 text-xs">• TradingView</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Mode Selector */}
-          <div onClick={(e) => e.stopPropagation()}>
-            <ModeSelector
-              mode={tradingMode}
-              setMode={setTradingMode}
-              timeframe={selectedTimeframe}
-              setTimeframe={setSelectedTimeframe}
-              showModeMenu={showModeMenu}
-              setShowModeMenu={setShowModeMenu}
-            />
-          </div>
+
           {/* Pair Selector */}
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
+          <div className="relative" data-pair-selector>
             <button
-              onClick={() => { setShowPairSelector(!showPairSelector); setShowModeMenu(false); }}
+              onClick={() => setShowPairSelector(!showPairSelector)}
               className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 rounded-lg px-3 py-1.5 text-gray-300 text-sm transition-colors"
             >
-              <span className="font-mono">{selectedPair}</span>
+              <span className="font-mono font-bold">{selectedPair}</span>
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
             <AnimatePresence>
@@ -751,23 +669,47 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Mode Info Bar */}
-      <div className="flex-shrink-0 bg-[#0e1621]/80 px-4 py-1.5 flex items-center justify-between border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <span className="text-gray-500 text-xs">Mode:</span>
-          <span className={`text-xs font-semibold ${
-            tradingMode === 'swing' ? 'text-emerald-400' : tradingMode === 'daytrading' ? 'text-blue-400' : 'text-orange-400'
-          }`}>
-            {currentMode.emoji} {currentMode.label}
+      {/* Mode & Timeframe Selector Bar — ALWAYS VISIBLE, DIRECT BUTTONS */}
+      <div className="flex-shrink-0 bg-[#0e1621] border-b border-white/5 px-3 py-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Mode Buttons — Direct click, no dropdown */}
+          <div className="flex items-center gap-1.5">
+            {TRADING_MODES.map(m => (
+              <button
+                key={m.id}
+                onClick={() => handleModeChange(m.id)}
+                className={getModeBtnClass(m.id, tradingMode === m.id)}
+              >
+                {m.emoji} {m.shortLabel}
+              </button>
+            ))}
+          </div>
+
+          {/* Separator */}
+          <div className="w-px h-6 bg-white/10 mx-1" />
+
+          {/* Timeframe Buttons — Change based on selected mode */}
+          <div className="flex items-center gap-1">
+            <Clock className="w-3 h-3 text-gray-500 mr-0.5" />
+            {currentMode.timeframes.map(tf => (
+              <button
+                key={tf}
+                onClick={() => setSelectedTimeframe(tf)}
+                className={getTfBtnClass(tf, selectedTimeframe === tf)}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
+
+          {/* Separator */}
+          <div className="w-px h-6 bg-white/10 mx-1" />
+
+          {/* Hold time indicator */}
+          <span className="text-gray-500 text-xs">
+            ⏱ {currentMode.holdTime}
           </span>
-          <span className="text-gray-600 text-xs">|</span>
-          <span className="text-gray-500 text-xs">TF:</span>
-          <span className="text-white text-xs font-mono font-bold">{selectedTimeframe}</span>
-          <span className="text-gray-600 text-xs">|</span>
-          <span className="text-gray-500 text-xs">Hold:</span>
-          <span className="text-gray-400 text-xs">{currentMode.holdTime}</span>
         </div>
-        <span className="text-gray-600 text-xs">{selectedPair}</span>
       </div>
 
       {/* Messages */}
@@ -790,16 +732,16 @@ export default function Home() {
             <BarChart3 className="w-3.5 h-3.5" /> Analyze
           </button>
           <button onClick={handleScan} disabled={isTyping} className="flex items-center gap-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-purple-500/20">
-            <Search className="w-3.5 h-3.5" /> Scan Market
+            <Search className="w-3.5 h-3.5" /> Scan
           </button>
           <button onClick={() => { setInputValue('What is an Order Block?'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-amber-500/20">
-            🏦 Order Block
+            🏦 OB
           </button>
           <button onClick={() => { setInputValue('What is a Fair Value Gap (FVG)?'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-pink-600/20 hover:bg-pink-600/30 text-pink-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-pink-500/20">
             💧 FVG
           </button>
           <button onClick={() => { setInputValue('Explain Kill Zones and Silver Bullet'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-cyan-500/20">
-            ⏰ Kill Zone
+            ⏰ KZ
           </button>
         </div>
       </div>
@@ -821,8 +763,8 @@ export default function Home() {
           </button>
         </div>
         <div className="flex items-center justify-between mt-1.5 px-1">
-          <span className="text-gray-500 text-xs">💡 Signal / Analyze / Scan Market | 🏦 ICT + 🕯️ Candlesticks | 📊 TradingView prices</span>
-          <span className="text-gray-600 text-xs">⚠️ Educational only</span>
+          <span className="text-gray-500 text-xs">💡 Signal / Analyze / Scan | 🏦 ICT + 🕯️ Candlesticks | 📊 TradingView</span>
+          <span className="text-gray-600 text-xs">⚠️ Edu only</span>
         </div>
       </div>
 
@@ -830,7 +772,7 @@ export default function Home() {
       <div className="flex-shrink-0 bg-[#0d1117] px-4 py-1 text-center">
         <p className="text-gray-600 text-xs flex items-center justify-center gap-1">
           <AlertTriangle className="w-3 h-3" />
-          Warning: Trading involves high risk. These are educational analyses only.
+          Trading involves high risk. Educational analyses only.
         </p>
       </div>
     </div>

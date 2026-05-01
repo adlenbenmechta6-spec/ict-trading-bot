@@ -126,9 +126,33 @@ const TRADING_PAIRS = [
   'US30', 'NAS100', 'GBP/JPY', 'AUD/USD',
 ];
 
+// ─── Mode Badge Colors (static Tailwind classes) ────────────────────
+const MODE_BADGE: Record<TradingMode, string> = {
+  swing: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/20',
+  daytrading: 'bg-blue-500/20 text-blue-300 border-blue-500/20',
+  scalping: 'bg-orange-500/20 text-orange-300 border-orange-500/20',
+};
+
+const MODE_BTN: Record<TradingMode, string> = {
+  swing: 'text-emerald-400 border-emerald-500/30 bg-emerald-600/20',
+  daytrading: 'text-blue-400 border-blue-500/30 bg-blue-600/20',
+  scalping: 'text-orange-400 border-orange-500/30 bg-orange-600/20',
+};
+
+const MODE_TEXT: Record<TradingMode, string> = {
+  swing: 'text-emerald-400',
+  daytrading: 'text-blue-400',
+  scalping: 'text-orange-400',
+};
+
+const MODE_INFO: Record<TradingMode, string> = {
+  swing: 'text-emerald-400',
+  daytrading: 'text-blue-400',
+  scalping: 'text-orange-400',
+};
+
 // ─── Signal Card ─────────────────────────────────────────────────────
 function SignalCard({ signal, mode }: { signal: SignalData; mode: TradingMode }) {
-  const modeConfig = TRADING_MODES.find(m => m.id === mode);
   return (
     <div className={`rounded-xl overflow-hidden border ${
       signal.type === 'BUY' ? 'border-emerald-500/30 bg-emerald-950/20' : 'border-red-500/30 bg-red-950/20'
@@ -143,11 +167,9 @@ function SignalCard({ signal, mode }: { signal: SignalData; mode: TradingMode })
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {modeConfig && (
-            <span className={`text-xs px-2 py-0.5 rounded-full bg-${modeConfig.color}-500/20 text-${modeConfig.color}-300 border border-${modeConfig.color}-500/20`}>
-              {modeConfig.emoji} {modeConfig.label}
-            </span>
-          )}
+          <span className={`text-xs px-2 py-0.5 rounded-full border ${MODE_BADGE[mode]}`}>
+            {TRADING_MODES.find(m => m.id === mode)?.emoji} {TRADING_MODES.find(m => m.id === mode)?.label}
+          </span>
           <span className="text-xs text-gray-400 font-mono">{signal.timeframe}</span>
         </div>
       </div>
@@ -377,18 +399,12 @@ function ModeSelector({
   setShowModeMenu: (v: boolean) => void;
 }) {
   const currentMode = TRADING_MODES.find(m => m.id === mode)!;
-  const modeColorMap: Record<string, string> = {
-    emerald: 'text-emerald-400 border-emerald-500/30 bg-emerald-600/20',
-    blue: 'text-blue-400 border-blue-500/30 bg-blue-600/20',
-    orange: 'text-orange-400 border-orange-500/30 bg-orange-600/20',
-  };
-  const modeBtnColor = modeColorMap[currentMode.color] || modeColorMap.emerald;
 
   return (
-    <div className="relative">
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button
-        onClick={() => setShowModeMenu(!showModeMenu)}
-        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors border ${modeBtnColor}`}
+        onClick={(e) => { e.stopPropagation(); setShowModeMenu(!showModeMenu); }}
+        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors border ${MODE_BTN[mode]}`}
       >
         <Clock className="w-3.5 h-3.5" />
         <span className="font-semibold">{currentMode.emoji} {currentMode.label}</span>
@@ -409,11 +425,11 @@ function ModeSelector({
             </div>
             {TRADING_MODES.map(m => {
               const isActive = mode === m.id;
-              const colors = modeColorMap[m.color];
               return (
                 <div key={m.id}>
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setMode(m.id);
                       setTimeframe(m.defaultTF);
                       setShowModeMenu(false);
@@ -421,7 +437,7 @@ function ModeSelector({
                     className={`w-full text-left px-3 py-2 transition-colors ${isActive ? 'bg-white/10' : 'hover:bg-white/5'}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className={`font-semibold text-sm ${isActive ? colors.split(' ')[0] : 'text-gray-300'}`}>
+                      <span className={`font-semibold text-sm ${isActive ? MODE_TEXT[m.id] : 'text-gray-300'}`}>
                         {m.emoji} {m.label}
                       </span>
                       {isActive && <span className="text-emerald-400 text-xs">✓ Active</span>}
@@ -437,7 +453,7 @@ function ModeSelector({
                           onClick={(e) => { e.stopPropagation(); setTimeframe(tf); }}
                           className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition-colors ${
                             timeframe === tf
-                              ? colors
+                              ? MODE_BTN[m.id]
                               : 'bg-white/5 text-gray-400 hover:bg-white/10'
                           }`}
                         >

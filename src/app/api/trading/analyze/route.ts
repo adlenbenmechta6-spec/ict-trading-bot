@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ICT_ANALYSIS_SYSTEM_PROMPT, ICT_KNOWLEDGE } from '@/lib/ict-knowledge';
-import { CANDLESTICK_KNOWLEDGE } from '@/lib/trading-knowledge';
 import { chatCompletion } from '@/lib/ai';
 import { fetchRealPrice } from '@/lib/market-data';
 
@@ -12,10 +10,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { pair = 'EUR/USD', timeframe = 'H4' } = body;
 
-    // Fetch REAL price
-    const marketData = await fetchRealPrice(pair);
+    // Fetch REAL price with timeout
+    const pricePromise = fetchRealPrice(pair);
+    const priceTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
+    const marketData = await Promise.race([pricePromise, priceTimeout]);
 
-    if (marketData.price === 0) {
+    if (!marketData || marketData.price === 0) {
       return NextResponse.json({
         success: false,
         error: `Could not fetch the current price for ${pair}. Please try again.`,
@@ -24,9 +24,11 @@ export async function POST(req: NextRequest) {
 
     const currentPrice = marketData.price;
 
-    // Use AI with reduced tokens for faster response
-    const aiAnalysis = await chatCompletion({
-      systemPrompt: `You are a professional market analyst combining Japanese Candlesticks and ICT Smart Money.
+    // Use AI with timeout for faster response
+    let aiAnalysis: string | null = null;
+    try {
+      const aiPromise = chatCompletion({
+        systemPrompt: `You are a professional market analyst combining Japanese Candlesticks and ICT Smart Money.
 
 You are reading the TradingView chart for ${pair} on ${timeframe} timeframe right now.
 The live price from TradingView is: ${currentPrice}
@@ -41,10 +43,16 @@ Analyze as if you are looking at the TradingView chart. Provide:
 
 All prices must be realistic and near the TradingView price of ${currentPrice}.
 Be concise and professional. Respond in English.`,
-      userMessage: `Analyze ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${marketData.high}, Today's low: ${marketData.low}. Be concise - 400 words max.`,
-      temperature: 0.7,
-      maxTokens: 600,
-    });
+        userMessage: `Analyze ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${marketData.high}, Today's low: ${marketData.low}. Be concise - 400 words max.`,
+        temperature: 0.7,
+        maxTokens: 600,
+      });
+
+      const aiTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
+      aiAnalysis = await Promise.race([aiPromise, aiTimeout]);
+    } catch {
+      // AI analysis failed, use fallback
+    }
 
     // Determine trend from analysis text
     let trend = 'Sideways';

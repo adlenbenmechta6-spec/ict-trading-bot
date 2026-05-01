@@ -69,34 +69,27 @@ Rules: prices near TradingView price ${currentPrice}, R:R at least 1:2, realisti
       signal = generateFallbackSignal(pair, timeframe, currentPrice, marketData, null);
     }
 
-    // Generate chart URL
-    const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
-
-    const chartParams = new URLSearchParams({
+    // Add chart data for client-side rendering
+    signal.chartData = {
       pair: signal.pair,
-      tf: signal.timeframe || timeframe,
-      price: signal.entry.toString(),
-      high: marketData.high.toString(),
-      low: marketData.low.toString(),
-      change: marketData.change.toString(),
-      changePct: marketData.changePercent.toString(),
+      timeframe: signal.timeframe || timeframe,
+      currentPrice: signal.entry,
+      high: marketData.high,
+      low: marketData.low,
       type: signal.type,
-      entry: signal.entry.toString(),
-      tp1: signal.tp1.toString(),
-      tp2: signal.tp2.toString(),
-      sl: signal.sl.toString(),
-      conf: signal.confidence.toString(),
-      rr: signal.riskReward,
+      entry: signal.entry,
+      tp1: signal.tp1,
+      tp2: signal.tp2,
+      sl: signal.sl,
+      confidence: signal.confidence,
+      riskReward: signal.riskReward,
       pattern: signal.pattern || '',
-      kz: signal.killZone || '',
-      liq: signal.liquidityType || '',
-      pd: signal.pdZone || '',
-      ict: (signal.ictElements || []).join(','),
-    });
-
-    signal.chartUrl = `/api/trading/chart?${chartParams.toString()}`;
+      killZone: signal.killZone || '',
+      liquidityType: signal.liquidityType || '',
+      pdZone: signal.pdZone || '',
+      ictElements: signal.ictElements || [],
+      changePercent: marketData.changePercent,
+    };
 
     return NextResponse.json({ success: true, signal });
   } catch (error) {

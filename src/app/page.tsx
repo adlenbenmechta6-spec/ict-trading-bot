@@ -5,8 +5,33 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, TrendingUp, BarChart3, Search, Bot, User, Zap, AlertTriangle, ChevronDown, RefreshCw,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+// Dynamic import to avoid SSR issues with Canvas
+const TradingViewChart = dynamic(() => import('@/components/TradingViewChart'), { ssr: false });
 
 // Types
+interface ChartData {
+  pair: string;
+  timeframe: string;
+  currentPrice: number;
+  high: number;
+  low: number;
+  type: 'BUY' | 'SELL';
+  entry: number;
+  tp1: number;
+  tp2: number;
+  sl: number;
+  confidence: number;
+  riskReward: string;
+  pattern: string;
+  killZone: string;
+  liquidityType: string;
+  pdZone: string;
+  ictElements: string[];
+  changePercent: number;
+}
+
 interface SignalData {
   type: 'BUY' | 'SELL';
   pair: string;
@@ -27,7 +52,7 @@ interface SignalData {
   liquidityType: string;
   pdZone: string;
   analysis?: string;
-  chartUrl?: string;
+  chartData?: ChartData;
 }
 
 interface ChatMessage {
@@ -38,7 +63,7 @@ interface ChatMessage {
   signalData?: SignalData;
   scanData?: Array<{ pair: string; name: string; currentPrice: number; trend: string; opportunity: string; score: number }>;
   scanSummary?: string;
-  chartUrl?: string;
+  chartData?: ChartData;
 }
 
 function formatTime(date: Date): string {
@@ -134,15 +159,10 @@ function SignalCard({ signal }: { signal: SignalData }) {
           </div>
           <span className="text-white font-mono font-bold text-sm">R:R {signal.riskReward}</span>
         </div>
-        {signal.chartUrl && (
+        {signal.chartData && (
           <div className="pt-2 border-t border-white/10">
             <div className="text-xs text-gray-400 mb-1.5">📊 Live Chart Analysis:</div>
-            <img
-              src={signal.chartUrl}
-              alt={`${signal.pair} Chart`}
-              className="w-full rounded-lg border border-white/10"
-              loading="lazy"
-            />
+            <TradingViewChart data={signal.chartData} />
           </div>
         )}
         {signal.analysis && (
@@ -280,14 +300,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         <div className="bg-[#182533] rounded-2xl rounded-tl-sm px-4 py-3">
           <p className="text-gray-100 text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
         </div>
-        {msg.chartUrl && (
+        {msg.chartData && (
           <div className="mt-2">
-            <img
-              src={msg.chartUrl}
-              alt="Chart Analysis"
-              className="w-full rounded-xl border border-white/10"
-              loading="lazy"
-            />
+            <TradingViewChart data={msg.chartData} />
           </div>
         )}
       </div>
@@ -363,6 +378,7 @@ export default function Home() {
         clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.signal) {
+          // Use chart data from the API response directly
           addMessage({ type: 'signal', content: '', signalData: data.signal });
         } else {
           addMessage({ type: 'bot', content: `❌ ${data.error || 'Could not generate a signal. Please try again.'}` });
@@ -394,7 +410,9 @@ export default function Home() {
         clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.aiAnalysis) {
-          addMessage({ type: 'analysis', content: data.aiAnalysis, chartUrl: data.chartUrl });
+          // Use chart data from the API response
+          const chartData: ChartData | undefined = data.chartData;
+          addMessage({ type: 'analysis', content: data.aiAnalysis, chartData });
         } else {
           addMessage({ type: 'bot', content: `❌ ${data.error || 'Analysis failed.'}` });
         }

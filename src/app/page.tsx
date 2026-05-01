@@ -40,7 +40,7 @@ interface ChatMessage {
 }
 
 function formatTime(date: Date): string {
-  return date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
 function generateId(): string {
@@ -64,7 +64,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
         <div className="flex items-center gap-2">
           <TrendingUp className={`w-5 h-5 ${signal.type === 'BUY' ? 'text-emerald-400' : 'text-red-400 rotate-180'}`} />
           <span className={`font-bold text-lg ${signal.type === 'BUY' ? 'text-emerald-400' : 'text-red-400'}`}>
-            {signal.type === 'BUY' ? '🟢 شراء' : '🔴 بيع'}
+            {signal.type === 'BUY' ? '🟢 BUY' : '🔴 SELL'}
           </span>
         </div>
         <span className="text-xs text-gray-400 font-mono">{signal.timeframe}</span>
@@ -72,26 +72,26 @@ function SignalCard({ signal }: { signal: SignalData }) {
       <div className="px-4 py-3 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-white font-bold text-xl">{signal.pair}</span>
-          <span className="text-gray-400 text-sm">الدخول: <span className="text-white font-mono">{signal.entry}</span></span>
+          <span className="text-gray-400 text-sm">Entry: <span className="text-white font-mono">{signal.entry}</span></span>
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-black/20 rounded-lg p-2 text-center">
-            <div className="text-xs text-gray-400 mb-1">هدف ١</div>
+            <div className="text-xs text-gray-400 mb-1">TP 1</div>
             <div className="text-emerald-400 font-mono font-bold">{signal.tp1}</div>
           </div>
           <div className="bg-black/20 rounded-lg p-2 text-center">
-            <div className="text-xs text-gray-400 mb-1">هدف ٢</div>
+            <div className="text-xs text-gray-400 mb-1">TP 2</div>
             <div className="text-emerald-400 font-mono font-bold">{signal.tp2}</div>
           </div>
           <div className="bg-black/20 rounded-lg p-2 text-center">
-            <div className="text-xs text-gray-400 mb-1">وقف خسارة</div>
+            <div className="text-xs text-gray-400 mb-1">Stop Loss</div>
             <div className="text-red-400 font-mono font-bold">{signal.sl}</div>
           </div>
         </div>
         <div className="space-y-1.5 text-sm">
           <div className="flex items-center gap-2">
             <span className="text-yellow-400">🕯️</span>
-            <span className="text-gray-300">النمط:</span>
+            <span className="text-gray-300">Pattern:</span>
             <span className="text-yellow-300 font-semibold">{signal.pattern}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ function SignalCard({ signal }: { signal: SignalData }) {
         <div className="flex items-center justify-between pt-2 border-t border-white/10">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-yellow-400" />
-            <span className="text-gray-300 text-sm">الثقة:</span>
+            <span className="text-gray-300 text-sm">Confidence:</span>
             <div className="flex items-center gap-1">
               <div className="w-16 h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div className={`h-full rounded-full ${signal.confidence >= 75 ? 'bg-emerald-400' : signal.confidence >= 50 ? 'bg-yellow-400' : 'bg-red-400'}`} style={{ width: `${signal.confidence}%` }} />
@@ -149,7 +149,7 @@ function ScanCard({ results, summary }: { results: ChatMessage['scanData']; summ
     <div className="rounded-xl overflow-hidden border border-purple-500/30 bg-purple-950/20">
       <div className="px-4 py-2 bg-purple-600/20 flex items-center gap-2">
         <Search className="w-5 h-5 text-purple-400" />
-        <span className="text-purple-400 font-bold">🔍 مسح السوق</span>
+        <span className="text-purple-400 font-bold">🔍 Market Scan</span>
       </div>
       <div className="px-4 py-3 space-y-3">
         <div className="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed">{summary}</div>
@@ -175,13 +175,13 @@ function ScanCard({ results, summary }: { results: ChatMessage['scanData']; summ
 // ─── Typing Indicator ────────────────────────────────────────────────
 function TypingIndicator() {
   return (
-    <div className="flex gap-2.5 my-1.5" dir="rtl">
+    <div className="flex gap-2.5 my-1.5">
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
         <Bot className="w-4 h-4 text-white" />
       </div>
       <div className="bg-[#182533] rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-blue-400 text-xs">يحلل السوق</span>
+          <span className="text-blue-400 text-xs">Analyzing market</span>
           <div className="flex gap-1">
             <motion.div className="w-1.5 h-1.5 rounded-full bg-blue-400" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0 }} />
             <motion.div className="w-1.5 h-1.5 rounded-full bg-blue-400" animate={{ y: [0, -6, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.15 }} />
@@ -205,7 +205,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
   if (msg.type === 'signal' && msg.signalData) {
     return (
-      <div className="flex gap-2.5 my-2 max-w-[95%] mx-auto" dir="rtl">
+      <div className="flex gap-2.5 my-2 max-w-[95%]">
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
           <Bot className="w-4 h-4 text-white" />
         </div>
@@ -222,7 +222,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
   if (msg.type === 'scan' && msg.scanData) {
     return (
-      <div className="flex gap-2.5 my-2 max-w-[95%] mx-auto" dir="rtl">
+      <div className="flex gap-2.5 my-2 max-w-[95%]">
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
           <Bot className="w-4 h-4 text-white" />
         </div>
@@ -239,12 +239,12 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
   if (msg.type === 'user') {
     return (
-      <div className="flex gap-2.5 my-1.5 justify-end" dir="rtl">
+      <div className="flex gap-2.5 my-1.5 justify-end">
         <div className="max-w-[75%]">
           <div className="bg-[#2b5278] rounded-2xl rounded-tl-sm px-4 py-2.5">
             <p className="text-white text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
           </div>
-          <div className="text-left mt-0.5"><span className="text-gray-500 text-xs">{formatTime(msg.timestamp)}</span></div>
+          <div className="text-right mt-0.5"><span className="text-gray-500 text-xs">{formatTime(msg.timestamp)}</span></div>
         </div>
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-green-600 flex items-center justify-center">
           <User className="w-4 h-4 text-white" />
@@ -255,7 +255,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
   // Bot message (default + analysis)
   return (
-    <div className="flex gap-2.5 my-1.5 max-w-[90%] mx-auto" dir="rtl">
+    <div className="flex gap-2.5 my-1.5 max-w-[90%]">
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
         <Bot className="w-4 h-4 text-white" />
       </div>
@@ -277,23 +277,23 @@ const initialMessages: ChatMessage[] = [
   {
     id: generateId(),
     type: 'system',
-    content: 'مرحباً بك في ICT Pro Bot 🤖📊',
+    content: 'Welcome to ICT Pro Bot 🤖📊',
     timestamp: new Date(Date.now() - 120000),
   },
   {
     id: generateId(),
     type: 'bot',
-    content: `السلام عليكم! 👋 أنا ICT Pro Bot - بوت تداول احترافي.
+    content: `Hey there! 👋 I'm ICT Pro Bot — your professional trading assistant.
 
-أجمع بين مدرستين قويتين:
-🕯️ الشموع اليابانية (كتاب فريد تام)
-🏦 ICT Smart Money (كتاب أيوب رانا)
+I combine two powerful methodologies:
+🕯️ Japanese Candlesticks (Fred K.H. Tam's book)
+🏦 ICT Smart Money (Ayub Rana's book)
 
-📊 أسعاري حقيقية من السوق مباشرة
-🔍 أحلل كأنني أنظر لشارت TradingView
+📊 My prices are real-time from the market
+🔍 I analyze as if I'm looking at a TradingView chart
 
-استخدم الأزرار بالأسفل أو اكتب سؤالك!
-⚠️ التداول ينطوي على مخاطر - هذه تحليلات تعليمية`,
+Use the buttons below or type your question!
+⚠️ Trading involves risk — these are educational analyses`,
     timestamp: new Date(Date.now() - 60000),
   },
 ];
@@ -326,7 +326,7 @@ export default function Home() {
   // Get signal
   const handleGetSignal = useCallback(async (pair?: string) => {
     const targetPair = pair || selectedPair;
-    addMessage({ type: 'user', content: `📊 أعطني إشارة ${targetPair}` });
+    addMessage({ type: 'user', content: `📊 Give me a signal for ${targetPair}` });
     simulateTyping(async () => {
       try {
         const res = await fetch('/api/trading/signal', {
@@ -338,10 +338,10 @@ export default function Home() {
         if (data.success && data.signal) {
           addMessage({ type: 'signal', content: '', signalData: data.signal });
         } else {
-          addMessage({ type: 'bot', content: `❌ ${data.error || 'لم أتمكن من توليد إشارة. حاول مرة أخرى.'}` });
+          addMessage({ type: 'bot', content: `❌ ${data.error || 'Could not generate a signal. Please try again.'}` });
         }
       } catch {
-        addMessage({ type: 'bot', content: '❌ خطأ في الاتصال. حاول مرة أخرى.' });
+        addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
       }
     }, 2000, 5000);
   }, [selectedPair, addMessage, simulateTyping]);
@@ -349,7 +349,7 @@ export default function Home() {
   // Analyze pair
   const handleAnalyze = useCallback(async (pair?: string) => {
     const targetPair = pair || selectedPair;
-    addMessage({ type: 'user', content: `🔍 حلل ${targetPair}` });
+    addMessage({ type: 'user', content: `🔍 Analyze ${targetPair}` });
     simulateTyping(async () => {
       try {
         const res = await fetch('/api/trading/analyze', {
@@ -361,17 +361,17 @@ export default function Home() {
         if (data.success && data.aiAnalysis) {
           addMessage({ type: 'analysis', content: data.aiAnalysis });
         } else {
-          addMessage({ type: 'bot', content: `❌ ${data.error || 'فشل التحليل.'}` });
+          addMessage({ type: 'bot', content: `❌ ${data.error || 'Analysis failed.'}` });
         }
       } catch {
-        addMessage({ type: 'bot', content: '❌ خطأ في الاتصال.' });
+        addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
       }
     }, 3000, 6000);
   }, [selectedPair, addMessage, simulateTyping]);
 
   // Market scan
   const handleScan = useCallback(async () => {
-    addMessage({ type: 'user', content: '🔍 امسح السوق' });
+    addMessage({ type: 'user', content: '🔍 Scan the market' });
     simulateTyping(async () => {
       try {
         const res = await fetch('/api/trading/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
@@ -379,10 +379,10 @@ export default function Home() {
         if (data.success) {
           addMessage({ type: 'scan', content: '', scanData: data.results, scanSummary: data.aiSummary });
         } else {
-          addMessage({ type: 'bot', content: `❌ ${data.error || 'فشل المسح.'}` });
+          addMessage({ type: 'bot', content: `❌ ${data.error || 'Scan failed.'}` });
         }
       } catch {
-        addMessage({ type: 'bot', content: '❌ خطأ في الاتصال.' });
+        addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
       }
     }, 4000, 8000);
   }, [addMessage, simulateTyping]);
@@ -396,17 +396,17 @@ export default function Home() {
     addMessage({ type: 'user', content: msg });
 
     // Quick command detection
-    if (msg.includes('إشارة') || msg.includes('صفقة') || msg.includes('signal')) {
+    if (msg.toLowerCase().includes('signal') || msg.toLowerCase().includes('trade')) {
       const pairMatch = msg.match(/(EUR\/USD|GBP\/USD|USD\/JPY|XAU\/USD|BTC\/USD|ETH\/USD|US30|NAS100|GBP\/JPY|AUD\/USD)/i);
       handleGetSignal(pairMatch ? pairMatch[1].toUpperCase() : undefined);
       return;
     }
-    if (msg.includes('تحليل') || msg.includes('حلل') || msg.includes('analyze')) {
+    if (msg.toLowerCase().includes('analyze') || msg.toLowerCase().includes('analysis')) {
       const pairMatch = msg.match(/(EUR\/USD|GBP\/USD|USD\/JPY|XAU\/USD|BTC\/USD|ETH\/USD|US30|NAS100|GBP\/JPY|AUD\/USD)/i);
       handleAnalyze(pairMatch ? pairMatch[1].toUpperCase() : undefined);
       return;
     }
-    if (msg.includes('مسح') || msg.includes('scan') || msg.includes('سوق')) {
+    if (msg.toLowerCase().includes('scan') || msg.toLowerCase().includes('market')) {
       handleScan();
       return;
     }
@@ -422,10 +422,10 @@ export default function Home() {
         if (data.success && data.response) {
           addMessage({ type: 'bot', content: data.response });
         } else {
-          addMessage({ type: 'bot', content: '❌ لم أتمكن من الرد. حاول مرة أخرى.' });
+          addMessage({ type: 'bot', content: '❌ Could not respond. Please try again.' });
         }
       } catch {
-        addMessage({ type: 'bot', content: '❌ خطأ في الاتصال.' });
+        addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
       }
     }, 1500, 3000);
   }, [inputValue, isTyping, addMessage, simulateTyping, handleGetSignal, handleAnalyze, handleScan]);
@@ -435,7 +435,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#0e1621]" dir="rtl">
+    <div className="h-screen flex flex-col bg-[#0e1621]">
       {/* Header */}
       <header className="flex-shrink-0 bg-[#17212b] border-b border-white/5 px-4 py-2.5 flex items-center justify-between z-20">
         <div className="flex items-center gap-3">
@@ -448,8 +448,8 @@ export default function Home() {
           <div>
             <h1 className="text-white font-bold text-sm">ICT Pro Bot 🤖</h1>
             <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400 text-xs">متصل</span>
-              <span className="text-gray-500 text-xs">• أسعار حقيقية</span>
+              <span className="text-emerald-400 text-xs">Online</span>
+              <span className="text-gray-500 text-xs">• Real-time prices</span>
             </div>
           </div>
         </div>
@@ -468,13 +468,13 @@ export default function Home() {
                   initial={{ opacity: 0, y: -5 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -5 }}
-                  className="absolute left-0 top-full mt-1 bg-[#17212b] border border-white/10 rounded-lg shadow-xl z-50 py-1 min-w-[140px] max-h-64 overflow-y-auto"
+                  className="absolute right-0 top-full mt-1 bg-[#17212b] border border-white/10 rounded-lg shadow-xl z-50 py-1 min-w-[140px] max-h-64 overflow-y-auto"
                 >
                   {TRADING_PAIRS.map(pair => (
                     <button
                       key={pair}
                       onClick={() => { setSelectedPair(pair); setShowPairSelector(false); }}
-                      className={`w-full text-right px-3 py-1.5 text-sm hover:bg-white/5 transition-colors ${pair === selectedPair ? 'text-blue-400 bg-white/5' : 'text-gray-300'}`}
+                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-white/5 transition-colors ${pair === selectedPair ? 'text-blue-400 bg-white/5' : 'text-gray-300'}`}
                     >
                       {pair}
                     </button>
@@ -489,7 +489,7 @@ export default function Home() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#2b3a4a transparent' }}>
         <div className="flex justify-center my-3">
-          <div className="bg-black/30 rounded-full px-3 py-1 text-xs text-gray-400">اليوم</div>
+          <div className="bg-black/30 rounded-full px-3 py-1 text-xs text-gray-400">Today</div>
         </div>
         {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
         <AnimatePresence>{isTyping && <TypingIndicator />}</AnimatePresence>
@@ -500,22 +500,22 @@ export default function Home() {
       <div className="flex-shrink-0 px-3 py-2 border-t border-white/5 bg-[#0e1621]">
         <div className="flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           <button onClick={() => handleGetSignal()} disabled={isTyping} className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-emerald-500/20">
-            <TrendingUp className="w-3.5 h-3.5" /> إشارة
+            <TrendingUp className="w-3.5 h-3.5" /> Signal
           </button>
           <button onClick={() => handleAnalyze()} disabled={isTyping} className="flex items-center gap-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-blue-500/20">
-            <BarChart3 className="w-3.5 h-3.5" /> تحليل
+            <BarChart3 className="w-3.5 h-3.5" /> Analyze
           </button>
           <button onClick={handleScan} disabled={isTyping} className="flex items-center gap-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-purple-500/20">
-            <Search className="w-3.5 h-3.5" /> مسح السوق
+            <Search className="w-3.5 h-3.5" /> Scan Market
           </button>
-          <button onClick={() => { setInputValue('ما هو الأوردر بلوك؟'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-amber-500/20">
-            🏦 أوردر بلوك
+          <button onClick={() => { setInputValue('What is an Order Block?'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-amber-500/20">
+            🏦 Order Block
           </button>
-          <button onClick={() => { setInputValue('ما هو FVG؟'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-pink-600/20 hover:bg-pink-600/30 text-pink-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-pink-500/20">
+          <button onClick={() => { setInputValue('What is a Fair Value Gap (FVG)?'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-pink-600/20 hover:bg-pink-600/30 text-pink-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-pink-500/20">
             💧 FVG
           </button>
-          <button onClick={() => { setInputValue('اشرح الكيل زون والسيلفر بوليت'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-cyan-500/20">
-            ⏰ كيل زون
+          <button onClick={() => { setInputValue('Explain Kill Zones and Silver Bullet'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-cyan-500/20">
+            ⏰ Kill Zone
           </button>
         </div>
       </div>
@@ -528,18 +528,17 @@ export default function Home() {
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={handleKeyPress}
-            placeholder="اكتب سؤالك أو طلب التحليل..."
+            placeholder="Type your question or analysis request..."
             className="flex-1 bg-[#0e1621] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500/50 transition-all"
             disabled={isTyping}
-            dir="rtl"
           />
           <button onClick={handleSendMessage} disabled={isTyping || !inputValue.trim()} className="w-10 h-10 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed flex items-center justify-center transition-colors">
-            <Send className="w-4 h-4 text-white rotate-180" />
+            <Send className="w-4 h-4 text-white" />
           </button>
         </div>
         <div className="flex items-center justify-between mt-1.5 px-1">
-          <span className="text-gray-500 text-xs">💡 إشارة / تحليل / مسح السوق | 🏦 ICT + 🕯️ شموع | 📊 أسعار حقيقية</span>
-          <span className="text-gray-600 text-xs">⚠️ تعليمي فقط</span>
+          <span className="text-gray-500 text-xs">💡 Signal / Analyze / Scan Market | 🏦 ICT + 🕯️ Candlesticks | 📊 Real-time prices</span>
+          <span className="text-gray-600 text-xs">⚠️ Educational only</span>
         </div>
       </div>
 
@@ -547,7 +546,7 @@ export default function Home() {
       <div className="flex-shrink-0 bg-[#0d1117] px-4 py-1 text-center">
         <p className="text-gray-600 text-xs flex items-center justify-center gap-1">
           <AlertTriangle className="w-3 h-3" />
-          تحذير: التداول ينطوي على مخاطر عالية. هذه تحليلات تعليمية فقط.
+          Warning: Trading involves high risk. These are educational analyses only.
         </p>
       </div>
     </div>

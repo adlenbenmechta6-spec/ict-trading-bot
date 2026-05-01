@@ -1,236 +1,236 @@
 // Trading Knowledge Base - Based on "The Power of Japanese Candlestick Charts" by Fred K.H. Tam
 
 export const CANDLESTICK_KNOWLEDGE = `
-# مرجع أنماط الشموع اليابانية
-# مستوحى من كتاب "قوة مخططات الشموع اليابانية" للكاتب فريد ك.هـ. تام
+# Japanese Candlestick Patterns Reference
+# Based on "The Power of Japanese Candlestick Charts" by Fred K.H. Tam
 
-## أنماط الانعكاس الصعودي (Bullish Reversal Patterns):
+## Bullish Reversal Patterns:
 
-### 1. الابتلاع الصعودي (Bullish Engulfing)
-- يتكون من شمعتين: الأولى سوداء والثانية بيضاء
-- جسم الشمعة البيضاء يبتلع بالكامل جسم الشمعة السوداء السابقة
-- يظهر بعد اتجاه هابط
-- كلما كان جسم الشمعة البيضاء أكبر كان الإشارة أقوى
-- يتطلب تأكيد بحجم تداول أعلى
+### 1. Bullish Engulfing
+- Consists of two candles: first black, second white
+- The white candle's body completely engulfs the previous black candle's body
+- Appears after a downtrend
+- The larger the white candle's body, the stronger the signal
+- Requires confirmation with higher volume
 
-### 2. المطرقة (Hammer)
-- تظهر بعد اتجاه هابط
-- جسم صغير في الأعلى وظل سفلي طويل (ضعف الجسم على الأقل)
-- ظل علوي قصير أو معدوم
-- اللون غير مهم لكن الشمعة البيضاء أقوى
-- تشير إلى رفض البائعين للأسعار المنخفضة
+### 2. Hammer
+- Appears after a downtrend
+- Small body at the top with a long lower shadow (at least twice the body)
+- Short or no upper shadow
+- Color is not important but a white candle is stronger
+- Indicates rejection of lower prices by sellers
 
-### 3. نجمة الصباح (Morning Star)
-- نمط من ثلاث شمعات:
-  - شمعة سوداء طويلة
-  - شمعة صغيرة بفجوة سفلية (الجسم لا يتداخل مع الشمعة الأولى)
-  - شمعة بيضاء تغلق فوق منتصف الشمعة الأولى
-- من أقوى إشارات الانعكاس الصعودي
+### 3. Morning Star
+- Three-candle pattern:
+  - Long black candle
+  - Small candle with a downside gap (body does not overlap with first candle)
+  - White candle closing above the midpoint of the first candle
+- One of the strongest bullish reversal signals
 
-### 4. الدوجي القاعي (Doji at Bottom)
-- يظهر بعد اتجاه هابط
-- سعر الافتتاح يساوي سعر الإغلاق تقريباً
-- يشير إلى تردد السوق وعدم يقين
-- يحتاج إلى تأكيد بشمعة بيضاء في الجلسة التالية
+### 4. Doji at Bottom
+- Appears after a downtrend
+- Opening price nearly equals closing price
+- Indicates market indecision and uncertainty
+- Needs confirmation with a white candle in the next session
 
-### 5. خط الاختراق (Piercing Line)
-- شمعتان: سوداء ثم بيضاء
-- الشمعة البيضاء تفتح تحت أدنى مستوى الشمعة السوداء
-- وتغلق فوق منتصف جسم الشمعة السوداء
-- إشارة صعودية قوية بعد هبوط
+### 5. Piercing Line
+- Two candles: black then white
+- White candle opens below the black candle's low
+- And closes above the midpoint of the black candle's body
+- Strong bullish signal after a decline
 
-### 6. الجنود البيض الثلاثة (Three White Soldiers)
-- ثلاث شمعات بيضاء متتالية
-- كل شمعة تغلق أعلى من سابقتها
-- فتحات كل شمعة ضمن جسم الشمعة السابقة
-- إشارة صعودية قوية جداً
+### 6. Three White Soldiers
+- Three consecutive white candles
+- Each candle closes higher than the previous
+- Each candle's open is within the previous candle's body
+- Very strong bullish signal
 
-### 7. هارامي صعودي (Bullish Harami)
-- شمعة سوداء كبيرة تليها شمعة بيضاء صغيرة
-- جسم الشمعة الصغيرة ضمن جسم الشمعة الكبيرة
-- يشير إلى ضعف البائعين
+### 7. Bullish Harami
+- Large black candle followed by a small white candle
+- Small candle's body is within the large candle's body
+- Indicates weakening of sellers
 
-### 8. ملقط القاع (Tweezers Bottom)
-- شمعتان لهما نفس أدنى مستوى
-- يشير إلى مستوى دعم قوي
+### 8. Tweezers Bottom
+- Two candles with the same low level
+- Indicates a strong support level
 
-## أنماط الانعكاس الهبوطي (Bearish Reversal Patterns):
+## Bearish Reversal Patterns:
 
-### 1. الابتلاع الهبوطي (Bearish Engulfing)
-- شمعة بيضاء تليها شمعة سوداء تبتلعها
-- يظهر بعد اتجاه صاعد
-- إشارة قوية للانعكاس الهبوطي
+### 1. Bearish Engulfing
+- White candle followed by a black candle that engulfs it
+- Appears after an uptrend
+- Strong bearish reversal signal
 
-### 2. الرجل المعلق (Hanging Man)
-- نفس شكل المطرقة لكن يظهر بعد اتجاه صاعد
-- جسم صغير في الأعلى وظل سفلي طويل
-- يشير إلى ضعف المشترين
+### 2. Hanging Man
+- Same shape as a hammer but appears after an uptrend
+- Small body at the top with a long lower shadow
+- Indicates weakening of buyers
 
-### 3. نجمة المساء (Evening Star)
-- عكس نجمة الصباح:
-  - شمعة بيضاء طويلة
-  - شمعة صغيرة بفجوة صعودية
-  - شمعة سوداء تغلق تحت منتصف الشمعة الأولى
+### 3. Evening Star
+- Reverse of Morning Star:
+  - Long white candle
+  - Small candle with an upside gap
+  - Black candle closing below the midpoint of the first candle
 
-### 4. الدوجي القمي (Doji at Top)
-- يظهر بعد اتجاه صاعد
-- يحتاج تأكيد بشمعة سوداء
+### 4. Doji at Top
+- Appears after an uptrend
+- Needs confirmation with a black candle
 
-### 5. غطاء السحابة المظلمة (Dark Cloud Cover)
-- عكس خط الاختراق
-- شمعة بيضاء ثم سوداء تفتح فوق أعلى مستوى
-- وتغلق تحت منتصف جسم الشمعة البيضاء
+### 5. Dark Cloud Cover
+- Reverse of Piercing Line
+- White candle then black candle opening above the high
+- And closing below the midpoint of the white candle's body
 
-### 6. الغربان السوداء الثلاثة (Three Black Crows)
-- ثلاث شمعات سوداء متتالية بإغلاقات أدنى
-- إشارة هبوطية قوية جداً
+### 6. Three Black Crows
+- Three consecutive black candles with lower closes
+- Very strong bearish signal
 
-### 7. هارامي هبوطي (Bearish Harami)
-- شمعة بيضاء كبيرة تليها شمعة سوداء صغيرة
-- يشير إلى ضعف المشترين
+### 7. Bearish Harami
+- Large white candle followed by a small black candle
+- Indicates weakening of buyers
 
-### 8. ملقط القمة (Tweezers Top)
-- شمعتان لهما نفس أعلى مستوى
-- يشير إلى مستوى مقاومة قوي
+### 8. Tweezers Top
+- Two candles with the same high level
+- Indicates a strong resistance level
 
-## أنماط الاستمرار (Continuation Patterns):
+## Continuation Patterns:
 
-### 1. طريقة الصعود الثلاثية (Rising Three Methods)
-- شمعة بيضاء طويلة
-- ثلاث شمعات سوداء صغيرة تصحح ضمن نطاق الشمعة الأولى
-- شمعة بيضاء تغلق أعلى من إغلاق الشمعة الأولى
-- إشارة استمرار صعودي
+### 1. Rising Three Methods
+- Long white candle
+- Three small black candles correcting within the first candle's range
+- White candle closing above the first candle's close
+- Bullish continuation signal
 
-### 2. طريقة الهبوط الثلاثية (Falling Three Methods)
-- عكس طريقة الصعود الثلاثية
-- إشارة استمرار هبوطي
+### 2. Falling Three Methods
+- Reverse of Rising Three Methods
+- Bearish continuation signal
 
-### 3. النوافذ (Windows/Gaps)
-- فجوة صعودية: نافذة صعودية (دعم)
-- فجوة هبوطية: نافذة هبوطية (مقاومة)
-- النافذة تعمل كدعم أو مقاومة
+### 3. Windows/Gaps
+- Upside gap: Bullish window (support)
+- Downside gap: Bearish window (resistance)
+- Windows act as support or resistance
 
-### 4. فجوات تسوكي (Tasuki Gaps)
-- فجوة صعودية مع تصحيح يعود لملء جزء من الفجوة
-- إشارة استمرار
+### 4. Tasuki Gaps
+- Upside gap with a correction partially filling the gap
+- Continuation signal
 
-## المؤشرات الغربية للتصفية (Western Indicators for Filtering):
+## Western Indicators for Filtering:
 
-### المتوسطات المتحركة (Moving Averages)
-- تقاطع ذهبي: MA5 يعبر فوق MA20 (صعودي)
-- تقاطع ميت: MA5 يعبر تحت MA20 (هبوطي)
+### Moving Averages
+- Golden Cross: MA5 crosses above MA20 (bullish)
+- Death Cross: MA5 crosses below MA20 (bearish)
 
 ### MACD (12, 26, 9)
-- تقاطع صعودي: خط MACD يعبر فوق خط الإشارة
-- تقاطع هبوطي: خط MACD يعبر تحت خط الإشارة
-- الديفرجنس إشارة قوية
+- Bullish crossover: MACD line crosses above signal line
+- Bearish crossover: MACD line crosses below signal line
+- Divergence is a strong signal
 
 ### RSI
-- فوق 70: تشبع شرائي
-- تحت 30: تشبع بيعي
-- ديفرجنس RSI مع السعر إشارة انعكاس
+- Above 70: Overbought
+- Below 30: Oversold
+- RSI divergence with price is a reversal signal
 
-### ستوكاستيك (%K, %D)
-- تقاطع %K فوق %D في منطقة التشبع البيعي: إشارة صعودية
-- تقاطع %K تحت %D في منطقة التشبع الشرائي: إشارة هبوطية
+### Stochastic (%K, %D)
+- %K crossing above %D in oversold zone: Bullish signal
+- %K crossing below %D in overbought zone: Bearish signal
 
-### بولينجر باند
-- السعر يلامس الحد العلوي: تشبع شرائي
-- السعر يلامس الحد السفلي: تشبع بيعي
-- تضيق النطاق يشير لاختراق قادم
+### Bollinger Bands
+- Price touching upper band: Overbought
+- Price touching lower band: Oversold
+- Band narrowing indicates an upcoming breakout
 
-### الحجم (Volume)
-- حجم مرتفع يأكد الإشارة
-- حجم منخفض يضعف الإشارة
+### Volume
+- High volume confirms the signal
+- Low volume weakens the signal
 
-## نظام P.I. للتداول المنهجي:
-- إشارة شراء: نمط شموع صعودي + تقاطع MA صعودي + RSI في تشبع بيعي يتحول صعوداً
-- إشارة بيع: نمط شموع هبوطي + تقاطع MA هبوطي + RSI في تشبع شرائي يتحول هبوطاً
+## P.I. System for Systematic Trading:
+- Buy signal: Bullish candlestick pattern + bullish MA crossover + RSI in oversold turning up
+- Sell signal: Bearish candlestick pattern + bearish MA crossover + RSI in overbought turning down
 
-## طرق ساكاتا الخمس (Sakata's Five Methods):
-1. سان-زان (Three Mountains) - قمة/قاع ثلاثي
-2. سان-سن (Three Rivers) - أنماط نجمة الصباح/المساء
-3. سان-كو (Three Gaps) - أنماط الفجوات الثلاث
-4. سان-بي (Three Parallel Lines) - الجنود/الغربان الثلاثة
-5. سان-بو (Three Methods) - طريقة الصعود/الهبوط الثلاثية
+## Sakata's Five Methods:
+1. San-Zan (Three Mountains) - Triple top/bottom
+2. San-Sen (Three Rivers) - Morning/Evening Star patterns
+3. San-Ku (Three Gaps) - Three gap patterns
+4. San-Pei (Three Parallel Lines) - Three Soldiers/Crows
+5. San-Po (Three Methods) - Rising/Falling Three Methods
 `;
 
-export const SIGNAL_SYSTEM_PROMPT = `أنت بوت تداول ذكي متخصص في تحليل الشموع اليابانية و ICT Smart Money. اسمك "بدل توقعات الذكي".
+export const SIGNAL_SYSTEM_PROMPT = `You are a professional trading bot specializing in Japanese Candlestick analysis and ICT Smart Money. Your name is "ICT Pro Bot".
 
-أنت خبير في تحليل الأسواق المالية باستخدام أنماط الشموع اليابانية والمؤشرات التقنية الغربية ومفاهيم ICT.
+You are an expert in financial market analysis using Japanese candlestick patterns, Western technical indicators, and ICT Smart Money concepts.
 
-أنت تستخدم TradingView كأداة تحليل أساسية - تقوم بقراءة الرسوم البيانية من TradingView وتحليل المؤشرات التقنية المتاحة على المنصة (RSI, MACD, Moving Averages, Bollinger Bands, Stochastic, Volume Profile, Fibonacci Retracement, Order Block indicators, FVG indicators) لاستخراج إشارات التداول بدقة عالية.
+You use TradingView as your primary analysis tool - you read TradingView charts and analyze the technical indicators available on the platform (RSI, MACD, Moving Averages, Bollinger Bands, Stochastic, Volume Profile, Fibonacci Retracement, Order Block indicators, FVG indicators) to extract high-precision trading signals.
 
-معرفتك مبنية على كتاب "قوة مخططات الشموع اليابانية" للكاتب فريد ك.هـ. تام وكتاب "Practical ICT Strategies" للكاتب أيوب رانا.
+Your knowledge is based on "The Power of Japanese Candlestick Charts" by Fred K.H. Tam and "Practical ICT Strategies" by Ayub Rana.
 
-قواعد التداول الخاصة بك:
-1. لا تعطي إشارة إلا عند توفر نمط شموع واضح + تأكيد من مؤشر تقني واحد على الأقل + تأكيد ICT عند الإمكان
-2. دائماً تحدد نقطة الدخول والهدف ووقف الخسارة
-3. نسبة المخاطرة/العائد يجب أن تكون 1:2 على الأقل (1:3 حسب منهجية ICT)
-4. تحدد مستوى الثقة بناءً على عدد المؤشرات المؤكدة وتوافق عناصر ICT
-5. تستخدم نظام P.I. للتداول المنهجي
-6. تستخدم طرق ساكاتا الخمس كإطار عمل
-7. تدمج تحليل TradingView مع أنماط الشموع و ICT لإعطاء تحليل شامل
+Your trading rules:
+1. Never give a signal unless there is a clear candlestick pattern + at least one technical indicator confirmation + ICT confirmation when possible
+2. Always specify entry point, take profit, and stop loss
+3. Risk/Reward ratio must be at least 1:2 (1:3 per ICT methodology)
+4. Set confidence level based on the number of confirming indicators and ICT confluences
+5. Use the P.I. system for systematic trading
+6. Use Sakata's Five Methods as a framework
+7. Integrate TradingView analysis with candlestick patterns and ICT for comprehensive analysis
 
-عند إعطاء إشارة تداول يجب أن تتضمن:
-- نوع الإشارة (شراء/بيع)
-- الزوج المالي
-- نقطة الدخول
-- هدف أول وثاني
-- وقف الخسارة
-- نمط الشموع المكتشف
-- قيم المؤشرات التقنية
-- مستوى الثقة (نسبة مئوية)
-- نسبة المخاطرة/العائد
-- السبب المنطقي للإشارة
+When giving a trading signal, it must include:
+- Signal type (BUY/SELL)
+- Trading pair
+- Entry point
+- First and second take profit targets
+- Stop loss
+- Detected candlestick pattern
+- Technical indicator values
+- Confidence level (percentage)
+- Risk/Reward ratio
+- Logical reasoning for the signal
 
-تحدث باللغة العربية دائماً. كن احترافياً وموضوعياً. لا تعد بنتائج مضمونة - التداول ينطوي على مخاطر.`;
+Always respond in English. Be professional and objective. Do not promise guaranteed results - trading involves risk.`;
 
-export const ANALYSIS_SYSTEM_PROMPT = `أنت محلل أسواق مالية خبير. تقوم بتحليل شامل للزوج المالي المحدد باستخدام:
+export const ANALYSIS_SYSTEM_PROMPT = `You are an expert financial market analyst. You perform comprehensive analysis of the specified trading pair using:
 
-1. تحليل أنماط الشموع اليابانية (الانعكاسية والاستمرارية)
-2. المؤشرات التقنية الغربية (MA, MACD, RSI, Stochastic, Bollinger Bands)
-3. إطار طرق ساكاتا الخمس
-4. نظام P.I. للتداول المنهجي
+1. Japanese Candlestick pattern analysis (reversal and continuation)
+2. Western Technical Indicators (MA, MACD, RSI, Stochastic, Bollinger Bands)
+3. Sakata's Five Methods framework
+4. P.I. System for systematic trading
 
-قدم تحليلاً مفصلاً يتضمن:
-- الاتجاه الحالي (صاعد/هابط/عرضي)
-- أنماط الشموع المكتشفة
-- حالة المؤشرات التقنية
-- مستويات الدعم والمقاومة
-- التوصية النهائية
+Provide detailed analysis including:
+- Current trend (bullish/bearish/sideways)
+- Detected candlestick patterns
+- Technical indicator status
+- Support and resistance levels
+- Final recommendation
 
-تحدث باللغة العربية. كن دقيقاً ومهنياً.`;
+Respond in English. Be precise and professional.`;
 
-export const SCAN_SYSTEM_PROMPT = `أنت ماسح أسواق مالية خبير. تقوم بفحص أزواج متعددة للبحث عن فرص تداول محتملة.
+export const SCAN_SYSTEM_PROMPT = `You are an expert market scanner. You scan multiple pairs looking for potential trading opportunities.
 
-لكل زوج، حدد:
-- هل يوجد نمط شموع واضح؟
-- هل المؤشرات التقنية تدعم الاتجاه؟
-- مستوى الفرصة (عالية/متوسطة/منخفضة)
-- التوصية المبدئية
+For each pair, determine:
+- Is there a clear candlestick pattern?
+- Do technical indicators support the direction?
+- Opportunity level (high/medium/low)
+- Initial recommendation
 
-رتب الفرص حسب الأولوية. تحدث باللغة العربية.`;
+Rank opportunities by priority. Respond in English.`;
 
 export const PAIRS = [
-  { symbol: 'EUR/USD', name: 'يورو/دولار', category: 'فوركس' },
-  { symbol: 'GBP/USD', name: 'جنيه/دولار', category: 'فوركس' },
-  { symbol: 'USD/JPY', name: 'دولار/ين', category: 'فوركس' },
-  { symbol: 'XAU/USD', name: 'ذهب/دولار', category: 'معادن' },
-  { symbol: 'BTC/USD', name: 'بيتكوين/دولار', category: 'عملات رقمية' },
-  { symbol: 'ETH/USD', name: 'إيثريوم/دولار', category: 'عملات رقمية' },
-  { symbol: 'US30', name: 'داو جونز', category: 'مؤشرات' },
-  { symbol: 'NAS100', name: 'ناسداك', category: 'مؤشرات' },
-  { symbol: 'GBP/JPY', name: 'جنيه/ين', category: 'فوركس' },
-  { symbol: 'AUD/USD', name: 'أسترالي/دولار', category: 'فوركس' },
-  { symbol: 'USD/CAD', name: 'دولار/كندي', category: 'فوركس' },
-  { symbol: 'NZD/USD', name: 'نيوزلندي/دولار', category: 'فوركس' },
+  { symbol: 'EUR/USD', name: 'Euro/Dollar', category: 'Forex' },
+  { symbol: 'GBP/USD', name: 'Pound/Dollar', category: 'Forex' },
+  { symbol: 'USD/JPY', name: 'Dollar/Yen', category: 'Forex' },
+  { symbol: 'XAU/USD', name: 'Gold/Dollar', category: 'Metals' },
+  { symbol: 'BTC/USD', name: 'Bitcoin/Dollar', category: 'Crypto' },
+  { symbol: 'ETH/USD', name: 'Ethereum/Dollar', category: 'Crypto' },
+  { symbol: 'US30', name: 'Dow Jones', category: 'Indices' },
+  { symbol: 'NAS100', name: 'NASDAQ', category: 'Indices' },
+  { symbol: 'GBP/JPY', name: 'Pound/Yen', category: 'Forex' },
+  { symbol: 'AUD/USD', name: 'Aussie/Dollar', category: 'Forex' },
+  { symbol: 'USD/CAD', name: 'Dollar/Cad', category: 'Forex' },
+  { symbol: 'NZD/USD', name: 'Kiwi/Dollar', category: 'Forex' },
 ];
 
 export const TIMEFRAMES = [
-  { value: 'M15', label: '15 دقيقة' },
-  { value: 'H1', label: 'ساعة' },
-  { value: 'H4', label: '4 ساعات' },
-  { value: 'D1', label: 'يومي' },
-  { value: 'W1', label: 'أسبوعي' },
+  { value: 'M15', label: '15 Min' },
+  { value: 'H1', label: '1 Hour' },
+  { value: 'H4', label: '4 Hours' },
+  { value: 'D1', label: 'Daily' },
+  { value: 'W1', label: 'Weekly' },
 ];

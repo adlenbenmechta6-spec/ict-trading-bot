@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ICT Pro Bot - بوت تداول احترافي",
-  description: "بوت تحليل فني احترافي يجمع بين الشموع اليابانية و ICT Smart Money مع أسعار حقيقية من السوق",
-  keywords: ["تداول", "شموع يابانية", "ICT", "إشارات", "تحليل فني", "فوركس", "Smart Money"],
+  title: "ICT Pro Bot - Professional Trading Assistant",
+  description: "Professional technical analysis bot combining Japanese Candlesticks and ICT Smart Money with real-time market prices",
+  keywords: ["trading", "candlesticks", "ICT", "signals", "technical analysis", "forex", "Smart Money"],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
@@ -28,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl" className="dark" suppressHydrationWarning>
+    <html lang="en" dir="ltr" className="dark" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0e1621] text-white overflow-hidden`}
       >

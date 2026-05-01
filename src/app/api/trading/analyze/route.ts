@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     if (marketData.price === 0) {
       return NextResponse.json({
         success: false,
-        error: `لم أتمكن من جلب سعر ${pair}. حاول مرة أخرى.`,
+        error: `Could not fetch the current price for ${pair}. Please try again.`,
       });
     }
 
@@ -24,39 +24,39 @@ export async function POST(req: NextRequest) {
     const aiAnalysis = await chatCompletion({
       systemPrompt: ICT_ANALYSIS_SYSTEM_PROMPT + '\n\n' + CANDLESTICK_KNOWLEDGE + '\n\n' + ICT_KNOWLEDGE + `
 
-أنت محلل أسواق محترف يجمع بين الشموع اليابانية (كتاب فريد تام) و ICT Smart Money (كتاب أيوب رانا).
-السعر الحالي لـ ${pair} هو ${currentPrice} (سعر حقيقي من السوق الآن).
-أنت تستخدم TradingView لتحليل الرسم البياني.
+You are a professional market analyst combining Japanese Candlesticks (Fred K.H. Tam's book) and ICT Smart Money (Ayub Rana's book).
+The current price of ${pair} is ${currentPrice} (real-time market price).
+You are using TradingView to analyze the chart.
 
-قدم تحليلاً شاملاً واقعياً يتضمن:
-1. الاتجاه الحالي (صاعد/هابط/عرضي) مع السبب
-2. أنماط الشموع المحتملة على الشارت
-3. عناصر ICT (أوردر بلوك، FVG، سيولة، تحول بنية)
-4. المؤشرات التقنية (RSI، MACD، المتوسطات)
-5. مستويات الدعم والمقاومة الحقيقية
-6. التوصية النهائية
+Provide a comprehensive, realistic analysis including:
+1. Current trend (bullish/bearish/sideways) with reasoning
+2. Potential candlestick patterns on the chart
+3. ICT elements (Order Blocks, FVG, Liquidity, Market Structure Shift)
+4. Technical indicators (RSI, MACD, Moving Averages)
+5. Real support and resistance levels
+6. Final recommendation
 
-كن واقعياً ومحترفاً. الأسعار التي تذكرها يجب أن تكون قريبة من السعر الحالي ${currentPrice}.
-تحدث باللغة العربية. كن مفصلاً ولكن منظماً.`,
-      userMessage: `قم بتحليل شامل لزوج ${pair} على الإطار الزمني ${timeframe}.
+Be realistic and professional. Prices you mention should be close to the current price of ${currentPrice}.
+Respond in English. Be detailed but organized.`,
+      userMessage: `Perform a comprehensive analysis for ${pair} on the ${timeframe} timeframe.
 
-السعر الحالي الحقيقي: ${currentPrice}
-أعلى سعر اليوم: ${marketData.high}
-أدنى سعر اليوم: ${marketData.low}
+Current real price: ${currentPrice}
+Today's high: ${marketData.high}
+Today's low: ${marketData.low}
 
-كأنك تنظر إلى شارت TradingView الآن - ماذا ترى؟ ما هي فرص التداول؟`,
+As if you're looking at a TradingView chart right now - what do you see? What are the trading opportunities?`,
       temperature: 0.7,
       maxTokens: 1500,
     });
 
     // Determine trend from analysis text
-    let trend = 'عرضي';
+    let trend = 'Sideways';
     if (aiAnalysis) {
       const lowerText = aiAnalysis.toLowerCase();
-      if (lowerText.includes('صاعد') && !lowerText.includes('غير صاعد') && !lowerText.includes('ليس صاعد')) {
-        trend = 'صاعد';
-      } else if (lowerText.includes('هبوط') && !lowerText.includes('غير هبوطي') && !lowerText.includes('ليس هبوطي')) {
-        trend = 'هبوطي';
+      if ((lowerText.includes('bullish') || lowerText.includes('uptrend')) && !lowerText.includes('not bullish')) {
+        trend = 'Bullish';
+      } else if ((lowerText.includes('bearish') || lowerText.includes('downtrend')) && !lowerText.includes('not bearish')) {
+        trend = 'Bearish';
       }
     }
 
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Analysis error:', error);
-    return NextResponse.json({ success: false, error: 'فشل في التحليل' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Analysis failed. Please try again.' }, { status: 500 });
   }
 }
 
@@ -84,19 +84,19 @@ function generateLocalAnalysis(
   const range = marketData.high - marketData.low;
   const position = range > 0 ? ((currentPrice - marketData.low) / range * 100).toFixed(0) : '50';
 
-  return `📊 تحليل شامل لزوج ${pair}
+  return `📊 Comprehensive Analysis for ${pair}
 
-🔷 السعر الحالي: ${currentPrice}
-🔷 الاتجاه: ${trend}
-🔷 نطاق اليوم: ${marketData.low} - ${marketData.high}
-🔷 موقع السعر: ${position}% من النطاق اليومي
+🔷 Current Price: ${currentPrice}
+🔷 Trend: ${trend}
+🔷 Daily Range: ${marketData.low} - ${marketData.high}
+🔷 Price Position: ${position}% of daily range
 
-🕯️ تحليل الشموع:
-السعر يتداول ${parseFloat(position) < 40 ? 'في المنطقة السفلية مما يشير لاحتمال ارتداد صعودي' : parseFloat(position) > 60 ? 'في المنطقة العلوية مما يشير لاحتمال تصحيح هبوطي' : 'في المنتصف مما يشير لتردد'}
+🕯️ Candlestick Analysis:
+Price is trading ${parseFloat(position) < 40 ? 'in the lower zone, indicating potential bullish reversal' : parseFloat(position) > 60 ? 'in the upper zone, indicating potential bearish correction' : 'near the middle, indicating indecision'}
 
-🏦 تحليل ICT:
-${parseFloat(position) < 40 ? '✅ السعر في منطقة خصم (Discount) - بيئة مناسبة للشراء' : '⚠️ السعر في منطقة علاوة (Premium) - انتظر تصحيح'}
-💧 السيولة: ${parseFloat(position) < 40 ? 'Sell Side Liquidity محتملة تحت القيعان' : 'Buy Side Liquidity محتملة فوق القمم'}
+🏦 ICT Analysis:
+${parseFloat(position) < 40 ? '✅ Price is in Discount zone - favorable environment for buying' : '⚠️ Price is in Premium zone - wait for correction'}
+💧 Liquidity: ${parseFloat(position) < 40 ? 'Sell Side Liquidity likely below the lows' : 'Buy Side Liquidity likely above the highs'}
 
-💡 التوصية: ${trend === 'صاعد' ? 'ابحث عن فرص شراء عند الدعم' : trend === 'هبوطي' ? 'ابحث عن فرص بيع عند المقاومة' : 'انتظر تأكيد اتجاه واضح'}`;
+💡 Recommendation: ${trend === 'Bullish' ? 'Look for buying opportunities at support' : trend === 'Bearish' ? 'Look for selling opportunities at resistance' : 'Wait for clear directional confirmation'}`;
 }

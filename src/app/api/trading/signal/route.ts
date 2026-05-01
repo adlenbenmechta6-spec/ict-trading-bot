@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     if (marketData.price === 0) {
       return NextResponse.json({
         success: false,
-        error: `لم أتمكن من جلب سعر ${pair}. حاول مرة أخرى.`,
+        error: `Could not fetch the current price for ${pair}. Please try again.`,
       });
     }
 
@@ -25,49 +25,49 @@ export async function POST(req: NextRequest) {
     const aiResponse = await chatCompletion({
       systemPrompt: ICT_SIGNAL_SYSTEM_PROMPT + '\n\n' + CANDLESTICK_KNOWLEDGE + '\n\n' + ICT_KNOWLEDGE + `
 
-أنت متداول محترف يجمع بين الشموع اليابانية و ICT Smart Money.
-السعر الحالي لـ ${pair} هو ${currentPrice} (سعر حقيقي من السوق الآن).
-أنت تستخدم TradingView لتحليل الرسم البياني وتطبيق المؤشرات التقنية.
+You are a professional trader combining Japanese Candlesticks and ICT Smart Money.
+The current price of ${pair} is ${currentPrice} (real-time market price).
+You are using TradingView to analyze the chart and apply technical indicators.
 
-مهمتك: قدم إشارة تداول واقعية ومحترفة بناءً على هذا السعر الحقيقي.
+Your task: Provide a realistic, professional trading signal based on this real price.
 
-يجب أن تكون إجابتك بصيغة JSON فقط (بدون markdown أو backticks):
+Your response must be in JSON format only (no markdown, no backticks):
 {
-  "type": "BUY" أو "SELL",
+  "type": "BUY" or "SELL",
   "pair": "${pair}",
   "timeframe": "${timeframe}",
-  "entry": رقم نقطة الدخول,
-  "tp1": رقم الهدف الأول,
-  "tp2": رقم الهدف الثاني,
-  "sl": رقم وقف الخسارة,
-  "pattern": "اسم النمط بالعربية",
-  "rsi": رقم RSI المتوقع,
-  "rsiStatus": "حالة RSI بالعربية",
-  "macd": "حالة MACD بالعربية",
-  "maCross": "حالة تقاطع المتوسطات بالعربية",
-  "confidence": رقم من 50 إلى 95,
-  "riskReward": "1:2" أو "1:3" الخ,
-  "ictElements": ["عنصر ICT 1", "عنصر ICT 2"],
-  "killZone": "الكيل زون المناسب",
-  "liquidityType": "نوع السيولة",
-  "pdZone": "المنطقة خصم/علاوة",
-  "analysis": "تحليل مختصر 3-4 أسطر بالعربية يشرح سبب الإشارة وربط الشموع بـ ICT"
+  "entry": entry price number,
+  "tp1": first target price number,
+  "tp2": second target price number,
+  "sl": stop loss price number,
+  "pattern": "pattern name in English",
+  "rsi": expected RSI number,
+  "rsiStatus": "RSI status in English",
+  "macd": "MACD status in English",
+  "maCross": "MA crossover status in English",
+  "confidence": number from 50 to 95,
+  "riskReward": "1:2" or "1:3" etc,
+  "ictElements": ["ICT element 1", "ICT element 2"],
+  "killZone": "appropriate Kill Zone",
+  "liquidityType": "liquidity type",
+  "pdZone": "Premium/Discount zone",
+  "analysis": "Brief 3-4 line analysis in English explaining the signal reasoning, connecting candlesticks with ICT"
 }
 
-قواعد مهمة:
-- الأسعار (entry, tp, sl) يجب أن تكون واقعية وقريبة من السعر الحالي ${currentPrice}
-- نسبة المخاطرة/العائد يجب أن تكون 1:2 على الأقل
-- وقف الخسارة يجب أن يكون منطقياً (ليس قريباً جداً أو بعيداً جداً)
-- الأهداف يجب أن تكون قابلة للتحقيق
-- استخدم تحليل ICT (أوردر بلوك، FVG، سيولة، كيل زون)
-- كن واقعياً - لا تعطي ثقة أعلى من 90% إلا في حالات نادرة
-- التنسيق: استخدم المنازل العشرية المناسبة للزوج`,
-      userMessage: `أعطني إشارة تداول حقيقية لزوج ${pair} على الإطار ${timeframe}.
-السعر الحالي الحقيقي: ${currentPrice}
-أعلى سعر اليوم: ${marketData.high}
-أدنى سعر اليوم: ${marketData.low}
+Important rules:
+- Prices (entry, tp, sl) must be realistic and close to the current price of ${currentPrice}
+- Risk/Reward ratio must be at least 1:2
+- Stop loss must be logical (not too close or too far)
+- Targets must be achievable
+- Use ICT analysis (Order Block, FVG, Liquidity, Kill Zone)
+- Be realistic - do not give confidence above 90% except in rare cases
+- Format: Use appropriate decimal places for the pair`,
+      userMessage: `Give me a real trading signal for ${pair} on the ${timeframe} timeframe.
+Current real price: ${currentPrice}
+Today's high: ${marketData.high}
+Today's low: ${marketData.low}
 
-حلل كما لو كنت تنظر إلى شارت TradingView الآن وقدم إشارة واقعية.`,
+Analyze as if you're looking at a TradingView chart right now and provide a realistic signal.`,
       temperature: 0.7,
       maxTokens: 800,
     });
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Signal generation error:', error);
-    return NextResponse.json({ success: false, error: 'فشل في توليد الإشارة' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to generate signal. Please try again.' }, { status: 500 });
   }
 }
 
@@ -131,20 +131,20 @@ function generateFallbackSignal(
     tp1: parseFloat(tp1.toFixed(decimals)),
     tp2: parseFloat(tp2.toFixed(decimals)),
     sl: parseFloat(sl.toFixed(decimals)),
-    pattern: isBuy ? 'منطقة تشبع بيعي + ارتداد من دعم' : 'منطقة تشبع شرائي + رفض من مقاومة',
+    pattern: isBuy ? 'Oversold zone + Support bounce' : 'Overbought zone + Resistance rejection',
     rsi: isBuy ? 32 : 68,
-    rsiStatus: isBuy ? 'تشبع بيعي (32)' : 'تشبع شرائي (68)',
-    macd: isBuy ? 'تقاطع صعودي متوقع' : 'تقاطع هبوطي متوقع',
-    maCross: isBuy ? 'تقاطع ذهبي متوقع' : 'تقاطع ميت متوقع',
+    rsiStatus: isBuy ? 'Oversold (32)' : 'Overbought (68)',
+    macd: isBuy ? 'Bullish crossover expected' : 'Bearish crossover expected',
+    maCross: isBuy ? 'Golden cross expected' : 'Death cross expected',
     confidence: 62,
     riskReward: `1:${rr.toFixed(1)}`,
     ictElements: [
-      isBuy ? 'أوردر بلوك صعودي محتمل' : 'أوردر بلوك هبوطي محتمل',
-      isBuy ? 'FVG صعودي' : 'FVG هبوطي',
+      isBuy ? 'Potential Bullish Order Block' : 'Potential Bearish Order Block',
+      isBuy ? 'Bullish FVG' : 'Bearish FVG',
     ],
-    killZone: 'كيل زون لندن',
+    killZone: 'London Kill Zone',
     liquidityType: isBuy ? 'Sell Side Liquidity (SSL)' : 'Buy Side Liquidity (BSL)',
-    pdZone: isBuy ? 'منطقة خصم (Discount)' : 'منطقة علاوة (Premium)',
-    analysis: aiText || `${isBuy ? '🟢' : '🔴'} إشارة ${isBuy ? 'شراء' : 'بيع'} على ${pair} عند ${entry.toFixed(decimals)}\nالسعر في ${isBuy ? 'المنطقة السفلية' : 'المنطقة العلوية'} من نطاق اليوم.\nبنية السوق تشير لاحتمال ${isBuy ? 'صعودي' : 'هبوطي'} مع تواجد ${isBuy ? 'سيولة بيعية' : 'سيولة شرائية'} قريبة.\n⚠️ إدارة المخاطر: لا تخاطر بأكثر من 2%`,
+    pdZone: isBuy ? 'Discount Zone' : 'Premium Zone',
+    analysis: aiText || `${isBuy ? '🟢' : '🔴'} ${isBuy ? 'BUY' : 'SELL'} signal on ${pair} at ${entry.toFixed(decimals)}\nPrice is in the ${isBuy ? 'lower zone' : 'upper zone'} of today's range.\nMarket structure suggests ${isBuy ? 'bullish' : 'bearish'} potential with ${isBuy ? 'sell-side' : 'buy-side'} liquidity nearby.\n⚠️ Risk management: Never risk more than 2%`,
   };
 }

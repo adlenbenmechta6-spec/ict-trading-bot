@@ -20,29 +20,29 @@ export async function POST(req: NextRequest) {
         high: data.high,
         low: data.low,
         name: PAIRS.find(p => p.symbol === pair)?.name || pair,
-        category: PAIRS.find(p => p.symbol === pair)?.category || 'أخرى',
+        category: PAIRS.find(p => p.symbol === pair)?.category || 'Other',
       }));
 
     if (validPairs.length === 0) {
       return NextResponse.json({
         success: false,
-        error: 'لم أتمكن من جلب أسعار السوق. حاول مرة أخرى.',
+        error: 'Could not fetch market prices. Please try again.',
       });
     }
 
     // Create summary for AI
     const summaryData = validPairs
-      .map(p => `${p.pair} (${p.name}): السعر ${p.price} | نطاق ${p.low}-${p.high} | ${p.category}`)
+      .map(p => `${p.pair} (${p.name}): Price ${p.price} | Range ${p.low}-${p.high} | ${p.category}`)
       .join('\n');
 
     const aiSummary = await chatCompletion({
       systemPrompt: ICT_SCAN_SYSTEM_PROMPT + '\n\n' + CANDLESTICK_KNOWLEDGE + '\n\n' + ICT_KNOWLEDGE + `
 
-أنت ماسح أسواق محترف. هذه أسعار حقيقية من السوق الآن.
-حلل الأزواج وحدد أفضل 3-5 فرص تداول.
-لكل فرصة اذكر: الزوج، الاتجاه المتوقع، السبب المختصر، مستوى الفرصة.
-كن مختصراً ومنظماً. تحدث بالعربية.`,
-      userMessage: `فحص السوق - الأسعار الحقيقية الآن:\n\n${summaryData}\n\nأي الأزواج تقدم أفضل فرص تداول الآن؟ ولماذا؟`,
+You are a professional market scanner. These are real-time market prices.
+Analyze the pairs and identify the top 3-5 trading opportunities.
+For each opportunity, mention: the pair, expected direction, brief reason, and opportunity level.
+Be concise and organized. Respond in English.`,
+      userMessage: `Market Scan - Real-time prices:\n\n${summaryData}\n\nWhich pairs offer the best trading opportunities right now? And why?`,
       maxTokens: 1000,
     });
 
@@ -51,21 +51,21 @@ export async function POST(req: NextRequest) {
       const range = p.high - p.low;
       const position = range > 0 ? (p.price - p.low) / range : 0.5;
       let score = 50;
-      let opportunity = 'متوسطة';
-      let trend = 'عرضي';
+      let opportunity = 'Medium';
+      let trend = 'Sideways';
 
       // Pairs near extremes may offer reversal opportunities
       if (position < 0.3) {
         score += 20; // Near support - potential buy
-        trend = 'محتمل صعودي';
+        trend = 'Potentially Bullish';
       } else if (position > 0.7) {
         score += 20; // Near resistance - potential sell
-        trend = 'محتمل هبوطي';
+        trend = 'Potentially Bearish';
       }
 
       score = Math.min(score, 85);
-      if (score >= 70) opportunity = 'عالية';
-      else if (score < 50) opportunity = 'منخفضة';
+      if (score >= 70) opportunity = 'High';
+      else if (score < 50) opportunity = 'Low';
 
       return {
         pair: p.pair,
@@ -85,11 +85,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       results,
-      aiSummary: aiSummary || `🔍 مسح السوق:\n\n${results.slice(0, 5).map((r, i) => `${i + 1}. ${r.pair} - ${r.currentPrice} - فرصة ${r.opportunity}`).join('\n')}`,
+      aiSummary: aiSummary || `🔍 Market Scan:\n\n${results.slice(0, 5).map((r, i) => `${i + 1}. ${r.pair} - ${r.currentPrice} - ${r.opportunity} Opportunity`).join('\n')}`,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Scan error:', error);
-    return NextResponse.json({ success: false, error: 'فشل في مسح السوق' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Market scan failed. Please try again.' }, { status: 500 });
   }
 }

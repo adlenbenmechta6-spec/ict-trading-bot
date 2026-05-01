@@ -3,268 +3,268 @@
 // And the teachings of Michael J. Huddleston (Inner Circle Trader)
 
 export const ICT_KNOWLEDGE = `
-# مرجع استراتيجيات ICT (Inner Circle Trader)
-# مستوحى من كتاب "استراتيجيات ICT العملية" لأيوب رانا - الطبعة الخامسة
-# و تعاليم مايكل ج. هادلستون (Inner Circle Trader)
+# ICT (Inner Circle Trader) Strategies Reference
+# Based on "Practical ICT Strategies" by Ayub Rana - 5th Edition
+# And the teachings of Michael J. Huddleston (Inner Circle Trader)
 
-## مفهوم ICT الأساسي:
-ICT هو منهجية تداول طوّرها مايكل ج. هادلستون. تركز على العلاقة بين الوقت والسعر.
-السعر يتم تسليمه والتحكم فيه بواسطة خوارزمية تسمى IPDA (خوارزمية تسليم السعر بين البنوك).
-الخوارزمية مصممة لاستهداف السيولة. سببان رئيسيان لتسليم السعر:
-1. موازنة أي اختلال في السعر
-2. صيد السيولة
-
----
-
-## مصفوفة PD-Array (Premium & Discount):
-
-### 1. أوردر بلوك (Order Block) ⭐⭐⭐⭐⭐
-منطقة على الرسم البياني تشير إلى أوامر مؤسسية ضخمة وتشير لانعكاس أو استمرار قوي.
-
-🟢 أوردر بلوك صعودي (Bullish OB):
-- آخر شمعة هبوطية قبل الحركة الصعودية القوية
-- الشمعة الصعودية الثانية تبتلع الشمعة الهبوطية الأولى (جسم لجسم + ظل لظل)
-- يجب وجود اختلال (Imbalance) في الإطار الزمني الأدنى
-- يجب وجود تحول في البنية (Structure Shift) في الإطار الزمني الأدنى
-
-🔴 أوردر بلوك هبوطي (Bearish OB):
-- آخر شمعة صعودية قبل الحركة الهبوطية القوية
-- الشمعة الهبوطية الثانية تبتلع الشمعة الصعودية الأولى
-- نفس شروط التأكيد المذكورة أعلاه
-
-### 2. بريكر بلوك (Breaker Block) ⭐⭐⭐⭐
-أوردر بلوك فاشل يتم تحديده بعد كنس السيولة أو تحول بنية السوق.
-
-🟢 بريكر صعودي: عندما يكسر السعر أوردر بلوك هبوطي (إغلاق فوق أعلاه) يعمل كدعم
-🔴 بريكر هبوطي: عندما يكسر السعر أوردر بلوك صعودي (إغلاق تحت أدناه) يعمل كمقاومة
-
-شروط التأكيد: كنس سيولة + أوردر بلوك صالح + إغلاق خارج الأوردر بلوك + تحول بنية
-
-### 3. فير فاليو غاب (Fair Value Gap - FVG) ⭐⭐⭐⭐⭐
-بنية من 3 شمعات تشير لفجوة بين أعلى وأدنى الشمعة الأولى والثالثة.
-
-🟢 FVG صعودي: يظهر في اتجاه صاعد - الشمعة الوسطى ذات جسم كبير
-- الفجوة بين أعلى الشمعة الأولى وأدنى الشمعة الثالثة
-- يعمل كدعم قوي - السعر يعود لملء الفجوة قبل الصعود
-
-🔴 FVG هبوطي: يظهر في اتجاه هابط - الفجوة بين أدنى الشمعة الأولى وأعلى الشمعة الثالثة
-- يعمل كمقاومة - السعر يعود لملء الفجوة قبل الهبوط
-
-### 4. إنفيرس FVG (Inverse Fair Value Gap) ⭐⭐⭐⭐
-يتكون عندما يفشل FVG في удержاء السعر ويتجاوزه.
-يشير لأول تحول في زخم السعر - إشارة انعكاس قوية.
-
-### 5. إمبلايد FVG (Implied Fair Value Gap) ⭐⭐⭐
-FVG مخفي - الخوارزمية تستخدمه لإعادة تسعير السعر.
-يتكون من شموع كبيرة بأجسام متداخلة مع ظلال الشمعات المجاورة.
-يُحدد باستخدام مستوى 50% (Consequent Encroachment) لظلال الشمعات.
-
-### 6. بالانسد برايس رينج (Balanced Price Range - BPR) ⭐⭐⭐
-منطقة يتداخل فيها فجوتان عادلتان للقيمة (FVG) متعاكستان.
-
-### 7. ريJECTION بلوك (Rejection Block) ⭐⭐⭐
-يعتمد على ظلال الرفض وكنس السيولة.
-🟢 ريJECTION صعودي: بعد كنس سيولة القيعان القديمة - ظل سفلي طويل
-🔴 ريJECTION هبوطي: بعد كنس سيولة القمم القديمة - ظل علوي طويل
-
-### 8. فاكيوم بلوك (Vacuum Block) ⭐⭐⭐
-فجوة في حركة السعر بسبب حدث عالي التقلب (FOMC, NFP).
-السعر يميل لملء هذه الفجوات ثم الاستمرار في اتجاه الفجوة.
-
-### 9. ميتيغيشن بلوك (Mitigation Block) ⭐⭐⭐⭐
-نمط انعكاسي يشير لفشل السعر في تسجيل قمة أعلى أو قاع أدنى.
-فشل السعر في الاستمرار في الاتجاه الحالي وفشل في كسر البنية السابقة.
+## Core ICT Concept:
+ICT is a trading methodology developed by Michael J. Huddleston. It focuses on the relationship between time and price.
+Price is delivered and controlled by an algorithm called IPDA (Interbank Price Delivery Algorithm).
+The algorithm is designed to target liquidity. Two main reasons for price delivery:
+1. To balance any price imbalance
+2. To hunt liquidity
 
 ---
 
-## مناطق السيولة المؤسسية (Institutional Liquidity Zones):
+## PD-Array Matrix (Premium & Discount):
 
-### 1. سيولة جانب الشراء (Buy Side Liquidity - BSL)
-أوامر الشراء المعلقة (Buy Stops) فوق القمم القديمة.
-صانعو السوق يستهدفون هذه القمم لتحويل الأوامر المعلقة لأوامر سوقية ثم يعكسون السعر.
+### 1. Order Block (OB) ⭐⭐⭐⭐⭐
+An area on the chart indicating massive institutional orders and signaling a strong reversal or continuation.
 
-### 2. سيولة جانب البيع (Sell Side Liquidity - SSL)
-أوامر البيع المعلقة (Sell Stops) تحت القيعان القديمة.
-صانعو السوق يستهدفون هذه القيعان لتحويل الأوامر المعلقة لأوامر سوقية ثم يعكسون السعر.
+🟢 Bullish Order Block:
+- Last bearish candle before the strong bullish move
+- The second bullish candle engulfs the first bearish candle (body to body + wick to wick)
+- Must have an Imbalance on the lower timeframe
+- Must have a Structure Shift on the lower timeframe
 
-### 3. سيولة المقاومة العالية والمنخفضة (HRLR & LRLR)
-- HRLR: قمة/قاع قديم يحميه مستويات مقاومة متعددة - يأخذ وقتاً طويلاً للكنس
-- LRLR: قمم/قيعان قصيرة المدى بين القمة والقاع القديمين - سهلة الكنس مع تسارع سعري
+🔴 Bearish Order Block:
+- Last bullish candle before the strong bearish move
+- The second bearish candle engulfs the first bullish candle
+- Same confirmation conditions as above
 
-### 4. السيولة الداخلية والخارجية (IRL & ERL)
-- التعامل مع نطاق ICT: المنطقة بين قمة متأرجحة وقاع متأرجح
-- IRL: FVG داخل نطاق التعامل (سيولة داخلية)
-- ERL: قمة وقاع نطاق التعامل (سيولة خارجية - BSL و SSL)
+### 2. Breaker Block ⭐⭐⭐⭐
+A failed Order Block identified after a liquidity sweep or market structure shift.
 
-### 5. بركة السيولة (Liquidity Pool)
-القمم القديمة = بركة سيولة شرائية فوقها
-القيعان القديمة = بركة سيولة بيعية تحتها
+🟢 Bullish Breaker: When price breaks a bearish Order Block (close above high), it acts as support
+🔴 Bearish Breaker: When price breaks a bullish Order Block (close below low), it acts as resistance
 
-### 6. فراغ السيولة (Liquidity Void)
-غياب المشترين/البائعين - اختلال حركتي قوي بدون تراجع
+Confirmation conditions: Liquidity sweep + valid Order Block + close outside OB + structure shift
 
-### 7. كنس السيولة وجريان السيولة (Sweep & Run)
-- Sweep: حركة لالتقاط السيولة ثم الانعكاس
-- Run: حركة في اتجاه الاتجاه السائد تستهدف السيولة وتستمر
+### 3. Fair Value Gap (FVG) ⭐⭐⭐⭐⭐
+A 3-candle structure indicating a gap between the high and low of the first and third candles.
+
+🟢 Bullish FVG: Appears in an uptrend - middle candle has a large body
+- Gap between the first candle's high and the third candle's low
+- Acts as strong support - price returns to fill the gap before continuing up
+
+🔴 Bearish FVG: Appears in a downtrend - gap between the first candle's low and the third candle's high
+- Acts as resistance - price returns to fill the gap before continuing down
+
+### 4. Inverse FVG (IFVG) ⭐⭐⭐⭐
+Forms when an FVG fails to hold price and price breaks through it.
+Indicates the first shift in price momentum - a strong reversal signal.
+
+### 5. Implied FVG ⭐⭐⭐
+A hidden FVG - the algorithm uses it to reprice.
+Formed by large candles with overlapping bodies and adjacent candle wicks.
+Identified using the 50% level (Consequent Encroachment) of candle wicks.
+
+### 6. Balanced Price Range (BPR) ⭐⭐⭐
+An area where two opposing Fair Value Gaps overlap.
+
+### 7. Rejection Block ⭐⭐⭐
+Based on rejection wicks and liquidity sweeps.
+🟢 Bullish Rejection: After sweeping old lows - long lower wick
+🔴 Bearish Rejection: After sweeping old highs - long upper wick
+
+### 8. Vacuum Block ⭐⭐⭐
+A gap in price movement due to a high-volatility event (FOMC, NFP).
+Price tends to fill these gaps then continue in the gap's direction.
+
+### 9. Mitigation Block ⭐⭐⭐⭐
+A reversal pattern indicating price failure to register a higher high or lower low.
+Price fails to continue in the current direction and fails to break the previous structure.
 
 ---
 
-## بنية السوق المتقدمة (Advance Market Structure):
+## Institutional Liquidity Zones:
 
-### مكونات بنية السوق:
-- STH (Short Term High): قمة قصيرة المدى - 3 شمعات
-- ITH (Intermediate Term High): قمة متوسطة - STH أعلى على اليمين واليسار
-- LTH (Long Term High): قمة طويلة المدى - ITH أعلى في المنتصف
-- STL, ITL, LTL: نفس المفهوم للقيعان
+### 1. Buy Side Liquidity (BSL)
+Pending buy orders (Buy Stops) above old highs.
+Market makers target these highs to convert pending orders into market orders then reverse price.
 
-### بنية صاعدة: قمم أعلى وقيعان أعلى (HH + HL)
-### بنية هابطة: قمم أدنى وقيعان أدنى (LH + LL)
-### بنية عرضية: قمم وقيعان متساوية
+### 2. Sell Side Liquidity (SSL)
+Pending sell orders (Sell Stops) below old lows.
+Market makers target these lows to convert pending orders into market orders then reverse price.
+
+### 3. HRLR & LRLR (High/Low Resistance Liquidity)
+- HRLR: Old high/low protected by multiple resistance levels - takes longer to sweep
+- LRLR: Short-term highs/lows between the old high and low - easy to sweep with price acceleration
+
+### 4. Internal & External Liquidity (IRL & ERL)
+- ICT Dealing Range: The area between a swing high and swing low
+- IRL: FVG inside the dealing range (internal liquidity)
+- ERL: Dealing range high and low (external liquidity - BSL and SSL)
+
+### 5. Liquidity Pool
+Old highs = Buy-side liquidity pool above them
+Old lows = Sell-side liquidity pool below them
+
+### 6. Liquidity Void
+Absence of buyers/sellers - strong two-way imbalance without pullback
+
+### 7. Liquidity Sweep & Run
+- Sweep: A move to capture liquidity then reverse
+- Run: A move in the direction of the prevailing trend targeting liquidity and continuing
 
 ---
 
-## نماذج صانع السوق (Market Maker Models):
+## Advance Market Structure:
 
-### نموذج الشراء (MMBM):
-1. تجميع أصلي (Original Consolidation)
-2. هندسة السيولة (Engineering Liquidity) - حركة هبوطية تصنع قمم أدنى
-3. انعكاس الأموال الذكية (Smart Money Reversal) - عند PD-Array
-4. صيد السيولة (Liquidity Hunt) - كنس القمم القديمة
+### Market Structure Components:
+- STH (Short Term High): 3-candle high
+- ITH (Intermediate Term High): STH higher on right and left
+- LTH (Long Term High): ITH higher in the middle
+- STL, ITL, LTL: Same concept for lows
 
-### نموذج البيع (MMSM):
-نفس المكونات لكن بالعكس - هندسة سيولة صعودية ثم انعكاس هبوطي
+### Bullish structure: Higher highs and higher lows (HH + HL)
+### Bearish structure: Lower highs and lower lows (LH + LL)
+### Consolidation: Equal highs and lows
 
 ---
 
-## أساسيات ICT (ICT Essentials):
+## Market Maker Models:
 
-### 1. نمط AMD ⭐⭐⭐⭐⭐
-التراكم → التلاعب → التوزيع
-- تراكم: تداول محصور عند الافتتاح - الأموال الذكية تجمع مراكزها
-- تلاعب: حركة خاطئة لخداع المتداولين الأفراد (كسر زائف)
-- توزيع: الحركة الحقيقية في الاتجاه المقصود
+### Market Maker Buy Model (MMBM):
+1. Original Consolidation
+2. Engineering Liquidity - bearish move creating lower highs
+3. Smart Money Reversal - at PD-Array
+4. Liquidity Hunt - sweeping old highs
 
-### 2. تحول بنية السوق (MSS - Market Structure Shift) ⭐⭐⭐⭐⭐
-إشارة أولية لعكس الاتجاه - كسر قمة/قاع متأرجح مع حركة إزاحة.
+### Market Maker Sell Model (MMSM):
+Same components but reversed - bullish liquidity engineering then bearish reversal
+
+---
+
+## ICT Essentials:
+
+### 1. AMD Pattern ⭐⭐⭐⭐⭐
+Accumulation → Manipulation → Distribution
+- Accumulation: Consolidated trading at open - Smart money accumulates positions
+- Manipulation: False move to deceive retail traders (fake breakout)
+- Distribution: The real move in the intended direction
+
+### 2. Market Structure Shift (MSS) ⭐⭐⭐⭐⭐
+Primary signal for trend reversal - breaking a swing high/low with displacement.
 
 ### 3. CISD (Change in State of Delivery) ⭐⭐⭐⭐
-تغيير في اتجاه تسليم السعر:
-- إغلاق فوق افتتاح التسليم الهبوطي = تحول صعودي
-- إغلاق تحت افتتاح التسليم الصعودي = تحول هبوطي
+Change in price delivery direction:
+- Close above bearish delivery open = bullish shift
+- Close below bullish delivery open = bearish shift
 
-### 4. تيرتل سوب (Turtle Soup) ⭐⭐⭐⭐
-نمط يعتمد على صيد أوامر الوقف فوق/تحت مستويات مهمة.
-كسر زائف لمستوى دعم/مقاومة ثم انعكاس.
-
----
-
-## نظرية الوقت والسعر (Time & Price Theory):
-
-### 1. النطاق الآسيوي (Asian Range)
-07:00 PM - 12:00 AM بتوقيت نيويورك
-تضييق النطاق = إشارة لتحول خوارزمي وتوجه قادم
-
-### 2. ماكرو ICT (ICT Macros)
-فترات زمنية قصيرة تبحث الخوارزمية فيها عن سيولة أو تعيد تسعير FVG.
-- آخر 10 دقائق + أول 10 دقائق من كل ساعة
-- الساعة الأخيرة فيها 4 ماكرو (كل 15 دقيقة)
-
-### 3. سيلفر بوليت (Silver Bullet) ⭐⭐⭐⭐⭐
-استراتيجية زمنية تعتمد على السيولة و FVG - تحدث 3 مرات يومياً:
-- لندن: 10:00-11:00 AM GMT
-- نيويورك صباح: 02:00-03:00 PM GMT
-- نيويورك مساء: 06:00-07:00 PM GMT
-
-خطوات: حدد BSL و SSL على 15 دقيقة → انتظر MSS → ادخل عند FVG
-
-### 4. كيل زون (Kill Zones) ⭐⭐⭐⭐⭐
-فترات زمنية ذات حجم تداول عالي:
-- آسيا: 7:00-10:00 PM NY | لندن: 2:00-5:00 AM NY
-- نيويورك: 7:00-10:00 AM NY | إغلاق لندن: 10:00 AM-12:00 PM NY
+### 4. Turtle Soup ⭐⭐⭐⭐
+A pattern based on hunting stop orders above/below important levels.
+False breakout of a support/resistance level then reversal.
 
 ---
 
-## نماذج التداول 2024:
+## Time & Price Theory:
 
-### نموذج 8:00 AM:
-1. حدد Relative Equal Highs/Lows على 1 دقيقة
-2. انتظر كنس السيولة
-3. بعد MSS: حدد Order Block + SIBI/BISI + Breaker Block
-4. ادخل عند العودة لـ PD-Array
+### 1. Asian Range
+07:00 PM - 12:00 AM New York time
+Range narrowing = signal for algorithmic shift and impending move
 
-### نموذج 7:00 AM:
-1. ابدأ الساعة 7:00 AM بتوقيت نيويورك
-2. حدد Relative Equal Highs/Lows على 5 دقائق/1 دقيقة
-3. بعد كنس السيولة و MSS: حدد IFVG (أول FVG قبل كنس الوقف)
-4. ادخل عند Consequent Encroachment (50%) للـ IFVG
+### 2. ICT Macros
+Short time windows where the algorithm seeks liquidity or reprices FVGs.
+- Last 10 minutes + first 10 minutes of each hour
+- Last hour has 4 macros (every 15 minutes)
 
-### SIBI: FVG هبوطي (شمعة مغلقة للأسفل)
-### BISI: FVG صعودي (شمعة مغلقة للأعلى)
+### 3. Silver Bullet ⭐⭐⭐⭐⭐
+A time-based strategy relying on liquidity and FVG - occurs 3 times daily:
+- London: 10:00-11:00 AM GMT
+- New York AM: 02:00-03:00 PM GMT
+- New York PM: 06:00-07:00 PM GMT
+
+Steps: Identify BSL and SSL on 15-min → Wait for MSS → Enter at FVG
+
+### 4. Kill Zones ⭐⭐⭐⭐⭐
+Time windows with high trading volume:
+- Asia: 7:00-10:00 PM NY | London: 2:00-5:00 AM NY
+- New York: 7:00-10:00 AM NY | London Close: 10:00 AM-12:00 PM NY
 
 ---
 
-## إدارة المخاطر:
-- لا تخاطر بأكثر من 2% لكل صفقة
-- نسبة المخاطرة/العائد: 1:3 كحد أدنى
-- حد خسارة يومي: 4% من رأس المال
-- صفقة واحدة أو اثنتين فقط يومياً
-- نوعية التداول أهم من كميته
+## 2024 Trading Models:
+
+### 8:00 AM Model:
+1. Identify Relative Equal Highs/Lows on 1-minute
+2. Wait for liquidity sweep
+3. After MSS: Identify Order Block + SIBI/BISI + Breaker Block
+4. Enter on return to PD-Array
+
+### 7:00 AM Model:
+1. Start at 7:00 AM New York time
+2. Identify Relative Equal Highs/Lows on 5-min/1-min
+3. After liquidity sweep and MSS: Identify IFVG (first FVG before stop sweep)
+4. Enter at Consequent Encroachment (50%) of IFVG
+
+### SIBI: Bearish FVG (candle closed downward)
+### BISI: Bullish FVG (candle closed upward)
+
+---
+
+## Risk Management:
+- Never risk more than 2% per trade
+- Risk/Reward ratio: minimum 1:3
+- Daily loss limit: 4% of capital
+- Only one or two trades per day
+- Quality over quantity in trading
 `;
 
-export const ICT_SIGNAL_SYSTEM_PROMPT = `أنت بوت تداول ذكي متخصص في تحليل الشموع اليابانية ومنهجية ICT (Inner Circle Trader). اسمك "بدل توقعات الذكي".
+export const ICT_SIGNAL_SYSTEM_PROMPT = `You are a professional trading bot specializing in Japanese Candlestick analysis and ICT (Inner Circle Trader) Smart Money methodology. Your name is "ICT Pro Bot".
 
-أنت خبير في تحليل الأسواق المالية باستخدام:
-1. أنماط الشموع اليابانية (من كتاب فريد تام)
-2. منهجية ICT لتداول الأموال الذكية (من تعاليم مايكل هادلستون وكتاب أيوب رانا)
-3. المؤشرات التقنية الغربية
+You are an expert in financial market analysis using:
+1. Japanese Candlestick Patterns (from Fred K.H. Tam's book)
+2. ICT Smart Money methodology (from Michael Huddleston's teachings and Ayub Rana's book)
+3. Western Technical Indicators
 
-قواعد التداول الخاصة بك:
-1. لا تعطي إشارة إلا عند توفر نمط شموع + تأكيد ICT (أوردر بلوك، FVG، تحول بنية)
-2. دائماً تحدد نقطة الدخول والهدف ووقف الخسارة
-3. نسبة المخاطرة/العائد يجب أن تكون 1:2 على الأقل (1:3 مثالي حسب ICT)
-4. تحدد مستوى الثقة بناءً على عدد التأكيدات (confluences)
-5. تستخدم نمط AMD (تراكم-تلاعب-توزيع) كإطار عمل
-6. تستخدم كيل زون لتحديد أفضل أوقات التداول
-7. تبحث عن سيولة (BSL/SSL) قبل الدخول
-8. تستخدم OTE (61.8%-79%) للدخول الأمثل
+Your trading rules:
+1. Never give a signal unless there is a clear candlestick pattern + at least one technical indicator confirmation + ICT confirmation when possible
+2. Always specify entry point, take profit, and stop loss
+3. Risk/Reward ratio must be at least 1:2 (ideally 1:3 per ICT methodology)
+4. Set confidence level based on the number of confirming indicators and ICT confluences
+5. Use the AMD pattern (Accumulation-Manipulation-Distribution) as your framework
+6. Use Kill Zones to determine optimal trading times
+7. Look for liquidity (BSL/SSL) before entering
+8. Use OTE (61.8%-79%) for optimal entry
 
-عند إعطاء إشارة تداول يجب أن تتضمن:
-- نوع الإشارة (شراء/بيع)
-- الزوج المالي
-- نقطة الدخول
-- هدف أول وثاني
-- وقف الخسارة
-- نمط الشموع المكتشف
-- عناصر ICT (أوردر بلوك، FVG، MSS، سيولة)
-- قيم المؤشرات التقنية
-- مستوى الثقة (نسبة مئوية)
-- نسبة المخاطرة/العائد
-- الكيل زون المناسب
-- السبب المنطقي للإشارة
+When giving a trading signal, it must include:
+- Signal type (BUY/SELL)
+- Trading pair
+- Entry point
+- First and second take profit targets
+- Stop loss
+- Detected candlestick pattern
+- ICT elements (Order Block, FVG, MSS, Liquidity)
+- Technical indicator values
+- Confidence level (percentage)
+- Risk/Reward ratio
+- Appropriate Kill Zone
+- Logical reasoning for the signal
 
-تحدث باللغة العربية دائماً. كن احترافياً وموضوعياً.`;
+Always respond in English. Be professional and objective. Do not promise guaranteed results - trading involves risk.`;
 
-export const ICT_ANALYSIS_SYSTEM_PROMPT = `أنت محلل أسواق مالية خبير يجمع بين تحليل الشموع اليابانية ومنهجية ICT. تقوم بتحليل شامل يتضمن:
+export const ICT_ANALYSIS_SYSTEM_PROMPT = `You are an expert financial market analyst combining Japanese Candlestick analysis and ICT Smart Money methodology. You perform comprehensive analysis including:
 
-1. تحليل أنماط الشموع اليابانية
-2. تحليل ICT: PD-Arrays (OB, Breaker, FVG, IFVG, BPR, Mitigation)
-3. تحليل السيولة (BSL, SSL, HRLR, LRLR, Sweep/Run)
-4. تحول بنية السوق (MSS, CISD, BOS, CHOCH)
-5. نمط AMD (تراكم-تلاعب-توزيع)
-6. المؤشرات التقنية الغربية
-7. نظرية الوقت والسعر (Kill Zones, Silver Bullet, Macros)
+1. Japanese Candlestick pattern analysis
+2. ICT Analysis: PD-Arrays (OB, Breaker, FVG, IFVG, BPR, Mitigation)
+3. Liquidity analysis (BSL, SSL, HRLR, LRLR, Sweep/Run)
+4. Market Structure Shift (MSS, CISD, BOS, CHOCH)
+5. AMD Pattern (Accumulation-Manipulation-Distribution)
+6. Western Technical Indicators
+7. Time & Price Theory (Kill Zones, Silver Bullet, Macros)
 
-قدم تحليلاً مفصلاً بالعربية. كن دقيقاً ومهنياً.`;
+Provide detailed analysis in English. Be precise and professional.`;
 
-export const ICT_SCAN_SYSTEM_PROMPT = `أنت ماسح أسواق مالية خبير يجمع بين الشموع اليابانية و ICT. تقوم بفحص أزواج متعددة للبحث عن فرص تداول محتملة.
+export const ICT_SCAN_SYSTEM_PROMPT = `You are an expert market scanner combining Japanese Candlestick analysis and ICT Smart Money. You scan multiple pairs looking for potential trading opportunities.
 
-لكل زوج، حدد:
-- هل يوجد نمط شموع واضح؟
-- هل يوجد أوردر بلوك أو FVG أو بريكر بلوك؟
-- هل تم كنس السيولة؟
-- هل يوجد تحول بنية (MSS/BOS)؟
-- هل المؤشرات التقنية تدعم الاتجاه؟
-- الكيل زون المناسب
-- مستوى الفرصة
+For each pair, determine:
+- Is there a clear candlestick pattern?
+- Is there an Order Block, FVG, or Breaker Block?
+- Has liquidity been swept?
+- Is there a market structure shift (MSS/BOS)?
+- Do technical indicators support the direction?
+- Appropriate Kill Zone
+- Opportunity level
 
-رتب الفرص حسب الأولوية. تحدث باللغة العربية.`;
+Rank opportunities by priority. Respond in English.`;

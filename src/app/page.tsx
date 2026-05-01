@@ -27,6 +27,7 @@ interface SignalData {
   liquidityType: string;
   pdZone: string;
   analysis?: string;
+  chartUrl?: string;
 }
 
 interface ChatMessage {
@@ -37,6 +38,7 @@ interface ChatMessage {
   signalData?: SignalData;
   scanData?: Array<{ pair: string; name: string; currentPrice: number; trend: string; opportunity: string; score: number }>;
   scanSummary?: string;
+  chartUrl?: string;
 }
 
 function formatTime(date: Date): string {
@@ -132,6 +134,17 @@ function SignalCard({ signal }: { signal: SignalData }) {
           </div>
           <span className="text-white font-mono font-bold text-sm">R:R {signal.riskReward}</span>
         </div>
+        {signal.chartUrl && (
+          <div className="pt-2 border-t border-white/10">
+            <div className="text-xs text-gray-400 mb-1.5">📊 Live Chart Analysis:</div>
+            <img
+              src={signal.chartUrl}
+              alt={`${signal.pair} Chart`}
+              className="w-full rounded-lg border border-white/10"
+              loading="lazy"
+            />
+          </div>
+        )}
         {signal.analysis && (
           <div className="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed pt-2 border-t border-white/10">
             {signal.analysis}
@@ -253,7 +266,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
     );
   }
 
-  // Bot message (default + analysis)
+  // Bot message (default + analysis with optional chart)
   return (
     <div className="flex gap-2.5 my-1.5 max-w-[90%]">
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
@@ -267,6 +280,16 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         <div className="bg-[#182533] rounded-2xl rounded-tl-sm px-4 py-3">
           <p className="text-gray-100 text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
         </div>
+        {msg.chartUrl && (
+          <div className="mt-2">
+            <img
+              src={msg.chartUrl}
+              alt="Chart Analysis"
+              className="w-full rounded-xl border border-white/10"
+              loading="lazy"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -371,7 +394,7 @@ export default function Home() {
         clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.aiAnalysis) {
-          addMessage({ type: 'analysis', content: data.aiAnalysis });
+          addMessage({ type: 'analysis', content: data.aiAnalysis, chartUrl: data.chartUrl });
         } else {
           addMessage({ type: 'bot', content: `❌ ${data.error || 'Analysis failed.'}` });
         }

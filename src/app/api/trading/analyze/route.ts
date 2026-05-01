@@ -51,6 +51,49 @@ Be concise and professional. Respond in English.`,
       }
     }
 
+    // Generate chart data for analysis
+    const range = marketData.high - marketData.low;
+    const position = range > 0 ? (currentPrice - marketData.low) / range : 0.5;
+    const isBuy = trend === 'Bullish' || (trend === 'Sideways' && position < 0.4);
+    const atr = range > 0 ? range * 0.3 : currentPrice * 0.005;
+
+    const chartData = {
+      type: isBuy ? 'BUY' as const : 'SELL' as const,
+      entry: currentPrice,
+      tp1: isBuy ? currentPrice + atr * 2 : currentPrice - atr * 2,
+      tp2: isBuy ? currentPrice + atr * 3.5 : currentPrice - atr * 3.5,
+      sl: isBuy ? currentPrice - atr : currentPrice + atr,
+      confidence: isBuy ? 65 : 65,
+      riskReward: '1:2.0',
+      pattern: isBuy ? 'Bullish Setup' : 'Bearish Setup',
+      killZone: '',
+      liquidityType: isBuy ? 'SSL' : 'BSL',
+      pdZone: isBuy ? 'Discount' : 'Premium',
+      ictElements: [isBuy ? 'Bullish OB' : 'Bearish OB'],
+    };
+
+    const chartParams = new URLSearchParams({
+      pair,
+      tf: timeframe,
+      price: currentPrice.toString(),
+      high: marketData.high.toString(),
+      low: marketData.low.toString(),
+      change: marketData.change.toString(),
+      changePct: marketData.changePercent.toString(),
+      type: chartData.type,
+      entry: chartData.entry.toString(),
+      tp1: chartData.tp1.toString(),
+      tp2: chartData.tp2.toString(),
+      sl: chartData.sl.toString(),
+      conf: chartData.confidence.toString(),
+      rr: chartData.riskReward,
+      pattern: chartData.pattern,
+      kz: chartData.killZone,
+      liq: chartData.liquidityType,
+      pd: chartData.pdZone,
+      ict: chartData.ictElements.join(','),
+    });
+
     return NextResponse.json({
       success: true,
       pair,
@@ -60,6 +103,7 @@ Be concise and professional. Respond in English.`,
       high: marketData.high,
       low: marketData.low,
       aiAnalysis: aiAnalysis || generateLocalAnalysis(pair, currentPrice, marketData, trend, timeframe),
+      chartUrl: `/api/trading/chart?${chartParams.toString()}`,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

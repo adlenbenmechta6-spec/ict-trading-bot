@@ -54,26 +54,51 @@ Rules: prices near TradingView price ${currentPrice}, R:R at least 1:2, realisti
       maxTokens: 400,
     });
 
+    let signal;
     if (aiResponse) {
       try {
         let cleaned = aiResponse.trim();
         if (cleaned.startsWith('```')) {
           cleaned = cleaned.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '');
         }
-        const signal = JSON.parse(cleaned);
-        return NextResponse.json({ success: true, signal });
+        signal = JSON.parse(cleaned);
       } catch {
-        return NextResponse.json({
-          success: true,
-          signal: generateFallbackSignal(pair, timeframe, currentPrice, marketData, aiResponse),
-        });
+        signal = generateFallbackSignal(pair, timeframe, currentPrice, marketData, aiResponse);
       }
+    } else {
+      signal = generateFallbackSignal(pair, timeframe, currentPrice, marketData, null);
     }
 
-    return NextResponse.json({
-      success: true,
-      signal: generateFallbackSignal(pair, timeframe, currentPrice, marketData, null),
+    // Generate chart URL
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
+
+    const chartParams = new URLSearchParams({
+      pair: signal.pair,
+      tf: signal.timeframe || timeframe,
+      price: signal.entry.toString(),
+      high: marketData.high.toString(),
+      low: marketData.low.toString(),
+      change: marketData.change.toString(),
+      changePct: marketData.changePercent.toString(),
+      type: signal.type,
+      entry: signal.entry.toString(),
+      tp1: signal.tp1.toString(),
+      tp2: signal.tp2.toString(),
+      sl: signal.sl.toString(),
+      conf: signal.confidence.toString(),
+      rr: signal.riskReward,
+      pattern: signal.pattern || '',
+      kz: signal.killZone || '',
+      liq: signal.liquidityType || '',
+      pd: signal.pdZone || '',
+      ict: (signal.ictElements || []).join(','),
     });
+
+    signal.chartUrl = `/api/trading/chart?${chartParams.toString()}`;
+
+    return NextResponse.json({ success: true, signal });
   } catch (error) {
     console.error('Signal generation error:', error);
     return NextResponse.json({ success: false, error: 'Failed to generate signal. Please try again.' }, { status: 500 });
@@ -89,10 +114,9 @@ function generateFallbackSignal(
   const range = marketData.high - marketData.low;
   const position = range > 0 ? (currentPrice - marketData.low) / range : 0.5;
 
-  // More nuanced buy/sell determination using change data
   let isBuy = position < 0.4;
-  if (marketData.changePercent < -0.3) isBuy = true; // Oversold bounce
-  if (marketData.changePercent > 0.3) isBuy = false; // Overbought reversal
+  if (marketData.changePercent < -0.3) isBuy = true;
+  if (marketData.changePercent > 0.3) isBuy = false;
 
   const type: 'BUY' | 'SELL' = isBuy ? 'BUY' : 'SELL';
   const atr = range > 0 ? range * 0.3 : currentPrice * 0.005;
@@ -103,16 +127,13 @@ function generateFallbackSignal(
   const sl = isBuy ? entry - atr * 1 : entry + atr * 1;
   const rr = Math.abs(tp1 - entry) / Math.abs(sl - entry);
 
-  // Dynamic confidence based on confluences
   let confidence = 60;
-  if (position < 0.25 || position > 0.75) confidence += 10; // Extreme zone
-  if (Math.abs(marketData.changePercent) > 0.5) confidence += 5; // Strong move
+  if (position < 0.25 || position > 0.75) confidence += 10;
+  if (Math.abs(marketData.changePercent) > 0.5) confidence += 5;
   confidence = Math.min(confidence, 85);
 
-  // RSI based on position
   const rsi = isBuy ? Math.round(28 + position * 15) : Math.round(62 + position * 10);
 
-  // Kill zone based on current hour (UTC)
   const hour = new Date().getUTCHours();
   let killZone = 'Off-Peak';
   if (hour >= 7 && hour <= 10) killZone = 'London Kill Zone';

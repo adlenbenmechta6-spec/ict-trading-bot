@@ -36,7 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -50,5 +49,27 @@ test
 prompt
 
 server.log
+
 # Skills directory
 /skills/
+
+# Upload directory (books, PDFs)
+/upload/
+
+# Database
+/db/
+
+# Agent context
+/agent-ctx/
+
+# Z scripts
+/.zscripts/
+
+# Download directory
+/download/
+
+# Caddy
+Caddyfile
+
+# Examples
+/examples/

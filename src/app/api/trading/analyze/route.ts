@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
-import { fetchRealPrice } from '@/lib/market-data';
+import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
 
 export const maxDuration = 30;
 
@@ -9,16 +9,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { pair = 'EUR/USD', timeframe = 'H4', mode = 'swing' } = body;
 
-    const marketData = await fetchRealPrice(pair);
+    // Fetch both real-time price and OHLCV data for the specific timeframe
+    const [marketData, ohlcvData] = await Promise.all([
+      fetchRealPrice(pair),
+      fetchOHLCVData(pair, timeframe),
+    ]);
 
-    if (marketData.price === 0) {
+    if (marketData.price === 0 && ohlcvData.currentPrice === 0) {
       return NextResponse.json({
         success: false,
         error: `Could not fetch the current price for ${pair}. Please try again.`,
       });
     }
 
-    const currentPrice = marketData.price;
+    const currentPrice = marketData.price || ohlcvData.currentPrice;
+    const dayHigh = marketData.high || ohlcvData.dayHigh;
+    const dayLow = marketData.low || ohlcvData.dayLow;
+    const changePercent = marketData.changePercent || ohlcvData.changePercent;
 
     // Mode-specific analysis label
     const modeLabel = mode === 'scalping' ? 'Scalping' : mode === 'daytrading' ? 'Day Trading' : 'Swing Trading';
@@ -43,7 +50,7 @@ ${mode === 'scalping' ? 'Focus on micro-level patterns and very tight levels. Qu
 
 All prices must be realistic and near the TradingView price of ${currentPrice}.
 Be concise and professional. Respond in English.`,
-      userMessage: `${modeLabel} analysis for ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${marketData.high}, Today's low: ${marketData.low}. Be concise - 400 words max.`,
+      userMessage: `${modeLabel} analysis for ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${dayHigh}, Today's low: ${dayLow}. Be concise - 400 words max.`,
       temperature: 0.7,
       maxTokens: 600,
     });
@@ -58,9 +65,9 @@ Be concise and professional. Respond in English.`,
       }
     }
 
-    // Generate chart data for analysis
-    const range = marketData.high - marketData.low;
-    const position = range > 0 ? (currentPrice - marketData.low) / range : 0.5;
+    // Generate chart data for analysis with real OHLCV candles
+    const range = dayHigh - dayLow;
+    const position = range > 0 ? (currentPrice - dayLow) / range : 0.5;
     const isBuy = trend === 'Bullish' || (trend === 'Sideways' && position < 0.4);
 
     // Adjust ATR multiplier based on mode
@@ -88,16 +95,16 @@ Be concise and professional. Respond in English.`,
       timeframe,
       currentPrice,
       trend,
-      high: marketData.high,
-      low: marketData.low,
-      changePercent: marketData.changePercent,
-      aiAnalysis: aiAnalysis || generateLocalAnalysis(pair, currentPrice, marketData, trend, timeframe, mode),
+      high: dayHigh,
+      low: dayLow,
+      changePercent,
+      aiAnalysis: aiAnalysis || generateLocalAnalysis(pair, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, trend, timeframe, mode),
       chartData: {
         pair,
         timeframe,
         currentPrice,
-        high: marketData.high,
-        low: marketData.low,
+        high: dayHigh,
+        low: dayLow,
         type: chartData.type,
         entry: chartData.entry,
         tp1: chartData.tp1,
@@ -110,7 +117,16 @@ Be concise and professional. Respond in English.`,
         liquidityType: chartData.liquidityType,
         pdZone: chartData.pdZone,
         ictElements: chartData.ictElements,
-        changePercent: marketData.changePercent,
+        changePercent,
+        // Include real OHLCV candle data for chart rendering
+        candles: ohlcvData.candles.slice(-60).map(c => ({
+          timestamp: c.timestamp,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+          volume: c.volume,
+        })),
       },
       timestamp: new Date().toISOString(),
     });

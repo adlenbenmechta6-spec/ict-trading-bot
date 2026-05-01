@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
-import { fetchRealPrice } from '@/lib/market-data';
+import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
 
 export const maxDuration = 30;
 
@@ -9,16 +9,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { pair = 'EUR/USD', timeframe = 'H4', mode = 'swing' } = body;
 
-    const marketData = await fetchRealPrice(pair);
+    // Fetch both real-time price and OHLCV data for the specific timeframe
+    const [marketData, ohlcvData] = await Promise.all([
+      fetchRealPrice(pair),
+      fetchOHLCVData(pair, timeframe),
+    ]);
 
-    if (marketData.price === 0) {
+    if (marketData.price === 0 && ohlcvData.currentPrice === 0) {
       return NextResponse.json({
         success: false,
         error: `Could not fetch the current price for ${pair}. Please try again.`,
       });
     }
 
-    const currentPrice = marketData.price;
+    const currentPrice = marketData.price || ohlcvData.currentPrice;
+    const dayHigh = marketData.high || ohlcvData.dayHigh;
+    const dayLow = marketData.low || ohlcvData.dayLow;
+    const changePercent = marketData.changePercent || ohlcvData.changePercent;
 
     // Mode-specific configuration
     const modeConfig = getModeConfig(mode, timeframe);
@@ -57,7 +64,7 @@ ${modeConfig.promptRules}
 
 All prices must be realistic and near the TradingView price of ${currentPrice}.
 R:R at least 1:2, realistic confidence.`,
-      userMessage: `${modeLabel} signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${marketData.high}, L: ${marketData.low}`,
+      userMessage: `${modeLabel} signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${dayHigh}, L: ${dayLow}`,
       temperature: 0.7,
       maxTokens: 400,
     });
@@ -71,19 +78,19 @@ R:R at least 1:2, realistic confidence.`,
         }
         signal = JSON.parse(cleaned);
       } catch {
-        signal = generateFallbackSignal(pair, timeframe, currentPrice, marketData, aiResponse, mode);
+        signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode);
       }
     } else {
-      signal = generateFallbackSignal(pair, timeframe, currentPrice, marketData, null, mode);
+      signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, null, mode);
     }
 
-    // Add chart data for client-side rendering
+    // Add chart data for client-side rendering with real OHLCV candles
     signal.chartData = {
       pair: signal.pair,
       timeframe: signal.timeframe || timeframe,
       currentPrice: signal.entry,
-      high: marketData.high,
-      low: marketData.low,
+      high: dayHigh,
+      low: dayLow,
       type: signal.type,
       entry: signal.entry,
       tp1: signal.tp1,
@@ -96,7 +103,16 @@ R:R at least 1:2, realistic confidence.`,
       liquidityType: signal.liquidityType || '',
       pdZone: signal.pdZone || '',
       ictElements: signal.ictElements || [],
-      changePercent: marketData.changePercent,
+      changePercent: changePercent,
+      // Include real OHLCV candle data for chart rendering
+      candles: ohlcvData.candles.slice(-60).map(c => ({
+        timestamp: c.timestamp,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volume,
+      })),
     };
 
     return NextResponse.json({ success: true, signal });
@@ -189,8 +205,6 @@ function generateFallbackSignal(
   else if (hour >= 19 && hour <= 22) killZone = 'Asian Kill Zone';
 
   // Mode-specific patterns and elements
-  const modeInfo = getModeConfig(mode, timeframe);
-
   let pattern: string;
   let ictElements: string[];
   let analysis: string;

@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 
 // ─── Types ──────────────────────────────────────────────────────────
+interface OHLCVCandle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 interface ChartData {
   pair: string;
   timeframe: string;
@@ -22,6 +31,7 @@ interface ChartData {
   pdZone: string;
   ictElements: string[];
   changePercent: number;
+  candles?: OHLCVCandle[];
 }
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -55,13 +65,10 @@ function formatCompactPrice(price: number, pair: string): string {
   return price.toFixed(4);
 }
 
-// Generate realistic candlestick data
+// Generate realistic candlestick data as fallback
 function generateCandles(config: ChartData, count: number = 45) {
   const { currentPrice, high, low, type } = config;
-  const candles: Array<{
-    open: number; close: number; high: number; low: number;
-    bullish: boolean; volume: number;
-  }> = [];
+  const candles: OHLCVCandle[] = [];
 
   const range = high - low;
   let price = currentPrice - (type === 'BUY' ? 1 : -1) * range * 0.2;
@@ -81,11 +88,11 @@ function generateCandles(config: ChartData, count: number = 45) {
     const candleLow = Math.min(open, close) - wickDown;
 
     candles.push({
+      timestamp: Date.now() - (count - i) * 14400000,
       open: parseFloat(open.toFixed(5)),
       close: parseFloat(close.toFixed(5)),
       high: parseFloat(Math.min(candleHigh, high * 1.01).toFixed(5)),
       low: parseFloat(Math.max(candleLow, low * 0.99).toFixed(5)),
-      bullish: close >= open,
       volume: Math.round(50 + Math.random() * 150 + Math.abs(change) / range * 200),
     });
 
@@ -98,12 +105,25 @@ function generateCandles(config: ChartData, count: number = 45) {
     const diff = currentPrice - last.close;
     last.close = currentPrice;
     last.open = currentPrice - diff;
-    last.bullish = last.close >= last.open;
     last.high = Math.max(last.high, currentPrice + Math.abs(diff) * 0.5);
     last.low = Math.min(last.low, currentPrice - Math.abs(diff) * 0.5);
   }
 
   return candles;
+}
+
+// Format timestamp for time axis based on timeframe
+function formatTimestamp(ts: number, timeframe: string): string {
+  const date = new Date(ts);
+  const h = date.getHours().toString().padStart(2, '0');
+  const m = date.getMinutes().toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+
+  if (timeframe === 'D1') {
+    return `${month}/${day}`;
+  }
+  return `${h}:${m}`;
 }
 
 // ─── Main Component ─────────────────────────────────────────────────
@@ -161,7 +181,10 @@ function drawChart(
   W: number,
   H: number
 ) {
-  const candles = generateCandles(config);
+  // Use real candles if available, otherwise generate
+  const candles = config.candles && config.candles.length > 5
+    ? config.candles
+    : generateCandles(config);
 
   // Layout
   const TOOLBAR_H = 36;
@@ -404,7 +427,8 @@ function drawChart(
 
     const bodyTop = Math.min(openYp, closeYp);
     const bodyHeight = Math.max(Math.abs(closeYp - openYp), 1);
-    const color = candle.bullish ? TV_GREEN : TV_RED;
+    const bullish = candle.close >= candle.open;
+    const color = bullish ? TV_GREEN : TV_RED;
 
     // Wick
     ctx.strokeStyle = color;
@@ -426,7 +450,7 @@ function drawChart(
     // Volume bar
     const volH = (candle.volume / maxVolume) * VOLUME_H * 0.85;
     const volY = VOLUME_BOTTOM - volH;
-    ctx.fillStyle = candle.bullish ? TV_VOLUME_GREEN : TV_VOLUME_RED;
+    ctx.fillStyle = bullish ? TV_VOLUME_GREEN : TV_VOLUME_RED;
     ctx.fillRect(x - bodyWidth / 2, volY, bodyWidth, volH);
   });
 
@@ -437,12 +461,14 @@ function drawChart(
     ctx.strokeStyle = TV_MA1;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
+    let started = false;
     sma20.forEach((val, i) => {
       if (val === null) return;
       const x = CHART_LEFT + candleWidth * (i + 19 - 0.5) + candleWidth / 2;
       const y = priceToY(val);
-      if (i === sma20.indexOf(sma20.find(v => v !== null))) {
+      if (!started) {
         ctx.moveTo(x, y);
+        started = true;
       } else {
         ctx.lineTo(x, y);
       }
@@ -456,12 +482,14 @@ function drawChart(
     ctx.strokeStyle = TV_MA2;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
+    let started = false;
     sma50.forEach((val, i) => {
       if (val === null) return;
       const x = CHART_LEFT + candleWidth * (i + 49 - 0.5) + candleWidth / 2;
       const y = priceToY(val);
-      if (i === sma50.indexOf(sma50.find(v => v !== null))) {
+      if (!started) {
         ctx.moveTo(x, y);
+        started = true;
       } else {
         ctx.lineTo(x, y);
       }
@@ -496,10 +524,8 @@ function drawChart(
   ctx.fillStyle = TV_ENTRY;
   ctx.textAlign = 'center';
   if (config.type === 'BUY') {
-    // Down arrow above entry
     ctx.fillText('\u25BC ENTRY', midChartX, entryY - 10);
   } else {
-    // Up arrow below entry
     ctx.fillText('\u25B2 ENTRY', midChartX, entryY + 16);
   }
   ctx.textAlign = 'left';
@@ -540,18 +566,15 @@ function drawChart(
   }
   ctx.textAlign = 'left';
 
-  // ─── Time Scale ──────────────────────────────────────────────────
-  const timeLabels = ['20:00', '22:00', '00:00', '02:00', '04:00', '06:00', '08:00', '10:00'];
+  // ─── Time Scale (using real timestamps) ──────────────────────────
   ctx.font = '9px "Roboto Mono", "SF Mono", "Consolas", monospace';
   ctx.fillStyle = TV_TEXT;
   ctx.textAlign = 'center';
-  const timeStep = Math.ceil(candleCount / timeLabels.length);
+  const timeStep = Math.max(1, Math.ceil(candleCount / 8));
   for (let i = 0; i < candleCount; i += timeStep) {
     const x = CHART_LEFT + candleWidth * (i + 0.5);
-    const labelIdx = Math.floor(i / timeStep);
-    if (labelIdx < timeLabels.length) {
-      ctx.fillText(timeLabels[labelIdx], x, H - 6);
-    }
+    const label = formatTimestamp(candles[i].timestamp, config.timeframe);
+    ctx.fillText(label, x, H - 6);
   }
   ctx.textAlign = 'left';
 
@@ -682,7 +705,8 @@ function drawChart(
   ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   ctx.fillStyle = '#2a2e39';
   ctx.textAlign = 'center';
-  ctx.fillText('TradingView \u2022 ICT Pro Bot \u2022 Yahoo Finance Live Data', W / 2, panelY - 4);
+  const dataSource = config.candles && config.candles.length > 5 ? 'Yahoo Finance Live Data' : 'Simulated Data';
+  ctx.fillText(`TradingView \u2022 ICT Pro Bot \u2022 ${dataSource}`, W / 2, panelY - 4);
   ctx.textAlign = 'left';
 
   // ─── Chart Border ────────────────────────────────────────────────

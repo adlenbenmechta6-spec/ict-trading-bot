@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
 import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
+import { ICT_SIGNAL_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
+import { ICT_BEST_INSTRUMENTS } from '@/lib/ict-core-content';
 
 export const maxDuration = 30;
 
@@ -31,10 +33,24 @@ export async function POST(req: NextRequest) {
     const modeConfig = getModeConfig(mode, timeframe);
     const modeLabel = modeConfig.label;
 
+    // Determine ICT instrument quality for this pair
+    const ictTier = getICTInstrumentTier(pair);
+
     const aiResponse = await chatCompletion({
-      systemPrompt: `You are a professional trader using TradingView. Generate a ${modeLabel} trading signal for ${pair} on ${timeframe} timeframe.
+      systemPrompt: `${ICT_SIGNAL_SYSTEM_PROMPT}
+
+You are generating a ${modeLabel} trading signal for ${pair} on ${timeframe} timeframe.
+
+ICT Instrument Quality: ${pair} is a ${ictTier} instrument for ICT analysis.
+${ictTier === 'Tier 1' ? `This is one of the BEST pairs for ICT — expect clean OB/FVG patterns, reliable liquidity sweeps, and strong Kill Zone behavior.` : ictTier === 'Tier 2' ? `Good pair for ICT — patterns are reliable but may need wider stops.` : `Acceptable for ICT but patterns may be less clean — require extra confirmation.`}
 
 You are reading the TradingView chart right now. The live TradingView price is: ${currentPrice}
+
+Apply Top-Down Analysis:
+1. HTF Bias (H4/D1): Is price in discount (buy) or premium (sell)?
+2. Structure: HH/HL (bullish) or LH/LL (bearish)?
+3. Liquidity: Where is the nearest BSL/SSL?
+4. ICT Confluences: How many align? (OB + FVG + Liquidity Sweep + MSS + Kill Zone + OTE + Premium/Discount)
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -56,14 +72,14 @@ Return ONLY valid JSON (no markdown, no backticks):
   "killZone": "zone name",
   "liquidityType": "liquidity type",
   "pdZone": "Premium/Discount",
-  "analysis": "2-3 sentence reasoning based on TradingView ${modeLabel} analysis"
+  "analysis": "2-3 sentence reasoning based on ICT Core Content ${modeLabel} analysis with specific references to months 1-12 concepts"
 }
 
 Important ${modeLabel} rules:
 ${modeConfig.promptRules}
 
 All prices must be realistic and near the TradingView price of ${currentPrice}.
-R:R at least 1:2, realistic confidence.`,
+R:R at least 1:2, realistic confidence based on ICT confluence count.`,
       userMessage: `${modeLabel} signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${dayHigh}, L: ${dayLow}`,
       temperature: 0.7,
       maxTokens: 400,
@@ -120,6 +136,20 @@ R:R at least 1:2, realistic confidence.`,
     console.error('Signal generation error:', error);
     return NextResponse.json({ success: false, error: 'Failed to generate signal. Please try again.' }, { status: 500 });
   }
+}
+
+// ─── ICT Instrument Tier Classification ───────────────────────────────
+function getICTInstrumentTier(pair: string): string {
+  const tier1 = ['EUR/USD', 'GBP/USD', 'XAU/USD', 'NAS100'];
+  const tier2 = ['USD/JPY', 'GBP/JPY', 'US30', 'US500'];
+  const tier3 = ['AUD/USD', 'USD/CAD', 'NZD/USD', 'EUR/GBP', 'USD/CHF'];
+  const tier4 = ['BTC/USD', 'ETH/USD'];
+
+  if (tier1.includes(pair)) return 'Tier 1';
+  if (tier2.includes(pair)) return 'Tier 2';
+  if (tier3.includes(pair)) return 'Tier 3';
+  if (tier4.includes(pair)) return 'Tier 4 (Crypto - patterns less reliable)';
+  return 'Tier 3';
 }
 
 // ─── Mode Configuration ─────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
 import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
+import { ICT_ANALYSIS_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
 
 export const maxDuration = 30;
 
@@ -31,25 +32,35 @@ export async function POST(req: NextRequest) {
     const modeLabel = mode === 'scalping' ? 'Scalping' : mode === 'daytrading' ? 'Day Trading' : 'Swing Trading';
 
     const aiAnalysis = await chatCompletion({
-      systemPrompt: `You are a professional market analyst combining Japanese Candlesticks and ICT Smart Money.
+      systemPrompt: `${ICT_ANALYSIS_SYSTEM_PROMPT}
 
 You are reading the TradingView chart for ${pair} on ${timeframe} timeframe right now.
 The live price from TradingView is: ${currentPrice}
 
 This is a ${modeLabel} analysis on ${timeframe}.
 
-Analyze as if you are looking at the TradingView chart. Provide:
-1. Current trend (bullish/bearish/sideways) with reason
-2. Candlestick patterns visible on the TradingView chart
-3. ICT elements (Order Block, FVG, Liquidity, MSS)
-4. TradingView indicators (RSI, MACD, Moving Averages, Bollinger Bands)
-5. Support & Resistance levels
-6. Trading recommendation appropriate for ${modeLabel}
+ICT Instrument Quality for ${pair}: ${getICTInstrumentTier(pair)}.
+${pair === 'XAU/USD' || pair === 'EUR/USD' || pair === 'GBP/USD' || pair === 'NAS100' ? 'This is one of the BEST instruments for ICT — expect clean OB/FVG patterns.' : 'Acceptable for ICT — may need extra confirmation.'}
 
-${mode === 'scalping' ? 'Focus on micro-level patterns and very tight levels. Quick in-and-out trades.' : mode === 'daytrading' ? 'Focus on intraday momentum. All positions should be closed before end of day.' : 'Focus on major structure and multi-day moves. Wider stops and targets.'}
+Apply the complete ICT Top-Down Analysis framework (Month 12):
+1. Long Term (Monthly/Weekly): Quarterly IPDA range, premium/discount, major liquidity
+2. Intermediate (Daily/H4): Structure, OB, FVG, MSS
+3. Short Term (H1/M15): Entry zone, intraday OB/FVG
+4. Intraday (M5/M1): Precise timing, Kill Zone, Silver Bullet
+
+Analyze as if you are looking at the TradingView chart. Provide:
+1. Current trend (bullish/bearish/sideways) with ICT structure analysis (HH/HL or LH/LL)
+2. Candlestick patterns visible on the TradingView chart (reference Fred K.H. Tam's book)
+3. ICT elements using Core Content terminology (Order Block, FVG, Breaker, Rejection, Propulsion, Mitigation, Liquidity, MSS, CISD, AMD)
+4. TradingView indicators (RSI, MACD, Moving Averages, Bollinger Bands)
+5. Support & Resistance with OTE zone (61.8%-79% retracement)
+6. ICT Confluence Score (1-10): HTF bias + Premium/Discount + OB + FVG + Liquidity Sweep + MSS + Kill Zone
+7. Trading recommendation appropriate for ${modeLabel}
+
+${mode === 'scalping' ? 'Focus on micro-level patterns (Month 8-9): OSOK model, Silver Bullet windows, M5/M1 OB and FVG. Quick in-and-out trades during Kill Zones.' : mode === 'daytrading' ? 'Focus on intraday momentum (Month 8): CBDR, intraday profiles, Bread & Butter setups. All positions should be closed before end of day.' : 'Focus on major structure and multi-day moves (Month 6): HTF OB/FVG, swing conditions, million dollar setup criteria. Wider stops and targets.'}
 
 All prices must be realistic and near the TradingView price of ${currentPrice}.
-Be concise and professional. Respond in English.`,
+Be concise and professional. Use specific ICT Core Content month references. Respond in English.`,
       userMessage: `${modeLabel} analysis for ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${dayHigh}, Today's low: ${dayLow}. Be concise - 400 words max.`,
       temperature: 0.7,
       maxTokens: 600,
@@ -228,4 +239,18 @@ OTE Zone: ${fib61_8.toFixed(decimals)} (61.8%-79% Fib — Optimal Trade Entry)
 ${detectedTrend.includes('Bullish') ? `🟢 Look for BUY setups at support levels. Best entry in OTE zone (${fib61_8.toFixed(decimals)}). Wait for MSS + FVG confirmation.` : detectedTrend.includes('Bearish') ? `🔴 Look for SELL setups at resistance levels. Best entry in OTE zone (${resistance1.toFixed(decimals)}-${resistance2.toFixed(decimals)}). Wait for MSS + FVG confirmation.` : `⏳ Wait for clear directional confirmation. Watch for liquidity sweep + MSS + FVG before entering.`}
 
 ⚠️ ${modeLabel} risk max ${riskMax} per trade. R:R minimum 1:2. This is educational analysis only.`;
+}
+
+// ─── ICT Instrument Tier Classification ───────────────────────────────
+function getICTInstrumentTier(pair: string): string {
+  const tier1 = ['EUR/USD', 'GBP/USD', 'XAU/USD', 'NAS100'];
+  const tier2 = ['USD/JPY', 'GBP/JPY', 'US30', 'US500'];
+  const tier3 = ['AUD/USD', 'USD/CAD', 'NZD/USD', 'EUR/GBP', 'USD/CHF'];
+  const tier4 = ['BTC/USD', 'ETH/USD'];
+
+  if (tier1.includes(pair)) return 'Tier 1';
+  if (tier2.includes(pair)) return 'Tier 2';
+  if (tier3.includes(pair)) return 'Tier 3';
+  if (tier4.includes(pair)) return 'Tier 4 (Crypto - patterns less reliable)';
+  return 'Tier 3';
 }

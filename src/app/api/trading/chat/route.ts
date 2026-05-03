@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
 import { fetchRealPrice } from '@/lib/market-data';
+import { ICT_KNOWLEDGE } from '@/lib/ict-knowledge';
+import { ICT_BEST_INSTRUMENTS, ICT_TRADING_MODELS } from '@/lib/ict-core-content';
 
 export const maxDuration = 30;
 
@@ -31,9 +33,25 @@ export async function POST(req: NextRequest) {
 
     // Try AI first
     const aiResponse = await chatCompletion({
-      systemPrompt: `You are ICT Pro Bot - a professional trading assistant. You combine Japanese Candlesticks and ICT Smart Money methodology.
+      systemPrompt: `You are ICT Pro Bot - a professional trading assistant trained on the complete ICT 2016-2017 Core Content (All 12 Months of Mentorship by Michael J. Huddleston). You combine Japanese Candlesticks (Fred K.H. Tam) and ICT Smart Money methodology.
 
-Answer questions about: candlestick patterns, ICT concepts (Order Block, FVG, BSL/SSL, Kill Zones, Silver Bullet, MSS), trading strategies, risk management.
+Your knowledge includes ALL 12 months of ICT Core Content:
+- Month 1: Trade elements, market maker conditioning, equilibrium, premium/discount, fair valuation, liquidity runs, impulse swings
+- Month 2: Risk management, growing small accounts, false flags, false breakouts, 10% per month
+- Month 3: Institutional order flow, market structure, trendline phantoms, head & shoulders traps
+- Month 4: ALL PD-Arrays (OB, Breaker, Rejection, Propulsion, Vacuum, Mitigation, Reclaimed OB, FVG, IFVG, BPR, Liquidity Voids/Pools)
+- Month 5: IPDA data ranges, 10-year yields, interest rate differentials, intermarket analysis, seasonals, money management
+- Month 6: Swing trading (ideal conditions, classic approach, million dollar setup, selecting explosive markets)
+- Month 7: Short term trading (weekly ranges, manipulation templates, LRLR, One Shot One Kill model)
+- Month 8: Day trading (CBDR, daily range, intraday profiles, high probability setups)
+- Month 9: Bread & Butter setups, sentiment effect, filling numbers, daily routine
+- Month 10: Multi-asset analysis (COT, bonds, index futures AM/PM trends, stocks)
+- Month 11: Mega-trades (commodity, forex, stock, bond mega-trades)
+- Month 12: Complete Top-Down Analysis framework (Long → Intermediate → Short → Intraday)
+
+Best instruments for ICT: XAU/USD (#1), EUR/USD (#2), GBP/USD (#3), NAS100 (#4) — these show cleanest patterns.
+
+Answer questions about: candlestick patterns, ICT concepts (OB, FVG, BSL/SSL, Kill Zones, Silver Bullet, MSS, AMD, OSOK, CBDR, Bread & Butter), all PD-Arrays, trading models, risk management, top-down analysis, best instruments.
 
 Be concise (200 words max), helpful, educational. Use emojis. Respond in English.`,
       userMessage: message + priceContext,
@@ -117,7 +135,74 @@ Time windows with the highest trading volume and institutional activity:
 3. Enter at the FVG that forms after the MSS
 4. SL below/above the liquidity sweep
 
-💡 Per ICT: The best trades happen when Kill Zones align with Silver Bullet windows and liquidity is present.`;
+💡 Per ICT Core Content Month 1 & 8: The best trades happen when Kill Zones align with Silver Bullet windows and liquidity is present. The Silver Bullet is a time-based model — during these windows, the algorithm actively hunts liquidity and fills FVGs.`;
+    } else if (lowerMsg.includes('best') && (lowerMsg.includes('pair') || lowerMsg.includes('instrument') || lowerMsg.includes('currency') || lowerMsg.includes('صنف') || lowerMsg.includes('عمل'))) {
+      response = `🏆 **Best Instruments for ICT Smart Money Trading**
+
+**Tier 1 — BEST for ICT (Cleanest patterns):**
+1. 🥇 **XAU/USD (Gold)** — Smart money favorite, respects OB/FVG exceptionally well, FVG fill rate ~75-80%
+2. 🥈 **EUR/USD** — Ultra-tight spreads, massive liquidity, smooth moves, FVG fill rate ~75-80%
+3. 🥉 **GBP/USD** — Larger swings, explosive moves, great for NY Kill Zone, FVG fill rate ~70-75%
+4. 🏅 **NAS100** — Clean AM/PM trend model, excellent for day trading
+
+**Tier 2 — Very Good:**
+5. USD/JPY — Active in Asian session, good for swing trading
+6. GBP/JPY — High volatility, experienced traders only
+7. US30 — Similar to NAS100, less volatile
+
+**Key Insight:** ICT works best on highly liquid instruments. EUR/USD and XAU/USD consistently show the MOST ICT confluences (OB + FVG + Liquidity + MSS + Kill Zone all aligning).
+
+💡 Start with XAU/USD or EUR/USD and master them before adding more pairs!`;
+    } else if (lowerMsg.includes('top down') || lowerMsg.includes('تحليل من أعلى')) {
+      response = `📊 **ICT Top-Down Analysis (Month 12 — Complete Framework)**
+
+The most important skill in ICT is Top-Down Analysis:
+
+1️⃣ **Long Term (Monthly/Weekly)**:
+- Quarterly IPDA range: Premium or Discount?
+- Major liquidity levels (yearly highs/lows)
+- Weekly OB and FVG
+- Done once per week
+
+2️⃣ **Intermediate (Daily/H4)**:
+- Weekly dealing range
+- Daily OB and FVG
+- MSS on daily chart
+- Done daily
+
+3️⃣ **Short Term (H1/M15)**:
+- Intraday OB and FVG
+- MSS on M15
+- Nearest liquidity pools
+- Done at session start
+
+4️⃣ **Intraday (M5/M1)**:
+- Kill Zone alignment
+- Silver Bullet timing
+- ICT Macros (first/last 10 min of hour)
+- Precise entry at FVG 50%
+
+💡 When ALL 4 levels align → highest probability trade possible!`;
+    } else if (lowerMsg.includes('osok') || lowerMsg.includes('one shot')) {
+      response = `🎯 **One Shot One Kill (OSOK) Model** — ICT Month 7
+
+ICT's most precise trading model:
+
+1. Find **relative equal highs/lows** on M5/M15
+2. Wait for **liquidity sweep** of those levels
+3. After sweep, wait for **MSS** (Market Structure Shift)
+4. Identify the **FVG** that forms after MSS
+5. Enter at **FVG 50%** (Consequent Encroachment)
+6. SL at **sweep extreme** (very tight!)
+7. TP at **opposite liquidity pool**
+
+Why it works:
+- Very tight SL = low risk
+- Target is opposite liquidity = high reward
+- R:R often 1:5 or better
+- Works best during Silver Bullet windows
+
+💡 One trade per day with this model is sufficient — quality over quantity!`;
     } else if (lowerMsg.includes('liquidity') || lowerMsg.includes('bsl') || lowerMsg.includes('ssl')) {
       response = `💧 **ICT Liquidity Concepts**
 
@@ -155,18 +240,24 @@ The primary signal for trend reversal — breaking a swing high/low with displac
 
 💡 Trading tip: After MSS, look for FVG formation — enter at the FVG's 50% level (Consequent Encroachment) for the highest probability entry.`;
     } else {
-      response = `🤖 I'm ICT Pro Bot! I can help you with:
+      response = `🤖 I'm ICT Pro Bot! I'm trained on the complete ICT 2016-2017 Core Content (All 12 Months). I can help you with:
 
-🕯️ **Candlestick Patterns:** Hammer, Engulfing, Morning/Evening Star, Doji, Harami, Three Soldiers/Crows, and more
-🏦 **ICT Concepts:** Order Blocks, FVG, Breaker Blocks, Liquidity (BSL/SSL), Kill Zones, Silver Bullet, MSS
-📊 **Analysis:** Ask me to analyze any pair (EUR/USD, XAU/USD, BTC/USD, etc.)
-📈 **Signals:** Click the Signal button for a trading signal
+🕯️ **Candlestick Patterns:** Hammer, Engulfing, Morning/Evening Star, Doji, Harami, Three Soldiers/Crows
+🏦 **ICT PD-Arrays:** Order Blocks, FVG, Breaker Blocks, Rejection Blocks, Propulsion Blocks, Mitigation Blocks
+💧 **Liquidity:** BSL/SSL, Liquidity Sweeps/Runs, HRLR/LRLR, Liquidity Voids/Pools
+📊 **ICT Models:** AMD, Silver Bullet, OSOK, Bread & Butter, 2022 Models, Market Maker Models
+⏰ **Timing:** Kill Zones, Silver Bullet Windows, ICT Macros, CBDR
+📈 **Trading Styles:** Swing (Month 6), Day Trading (Month 8), Scalping (Month 7-9)
+🔍 **Analysis:** Top-Down Analysis (Month 12), Multi-Asset (Month 10)
+🏆 **Best Pairs:** Ask "best pairs for ICT" to learn which instruments work best
 
 Try asking about:
 • "What is an Order Block?"
-• "Explain FVG"
-• "Tell me about Kill Zones"
-• "What is liquidity sweep?"
+• "Explain FVG and IFVG"
+• "Best pairs for ICT trading"
+• "What is the OSOK model?"
+• "Explain Top-Down Analysis"
+• "What is the Bread & Butter setup?"
 
 ⚠️ Remember: Trading involves risk. These are educational analyses.`;
     }

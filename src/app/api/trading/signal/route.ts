@@ -129,6 +129,8 @@ R:R at least 1:2, realistic confidence based on ICT confluence count.`,
         close: c.close,
         volume: c.volume,
       })),
+      dataSource: ohlcvData.source,
+      dataDelay: ohlcvData.delay,
     };
 
     return NextResponse.json({ success: true, signal });

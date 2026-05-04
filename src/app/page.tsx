@@ -78,6 +78,8 @@ interface ChartData {
   ictElements: string[];
   changePercent: number;
   candles?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>;
+  dataSource?: string;
+  dataDelay?: string;
 }
 
 interface SignalData {

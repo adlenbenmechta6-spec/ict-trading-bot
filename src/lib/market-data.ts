@@ -1,6 +1,9 @@
 // Real Market Data Service - Fetches live prices and OHLCV from Yahoo Finance API
 // Supports multiple timeframes: M1, M5, M15, M30, H1, H4, D1
 // Works on Vercel and any public hosting (no internal SDK required)
+//
+// Key fix: H4 candles are now PROPERLY AGGREGATED from 1h candles
+// (Yahoo Finance doesn't have a 4h interval, so we fetch 1h and combine)
 
 export interface MarketData {
   pair: string;
@@ -11,6 +14,7 @@ export interface MarketData {
   low: number;
   timestamp: string;
   source: string;
+  delay?: string; // e.g. "~15min delayed"
 }
 
 export interface OHLCVCandle {
@@ -32,26 +36,28 @@ export interface OHLCVData {
   change: number;
   changePercent: number;
   source: string;
+  delay?: string;
 }
 
 // Yahoo Finance interval mapping for different timeframes
-const YAHOO_INTERVAL_MAP: Record<string, { interval: string; range: string }> = {
+// H4 uses 1h data that gets aggregated into 4h candles
+const YAHOO_INTERVAL_MAP: Record<string, { interval: string; range: string; aggregateTo?: string }> = {
   'M1':  { interval: '1m',  range: '1d' },
   'M5':  { interval: '5m',  range: '5d' },
   'M15': { interval: '15m', range: '10d' },
   'M30': { interval: '30m', range: '10d' },
   'H1':  { interval: '1h',  range: '30d' },
-  'H4':  { interval: '1h',  range: '60d' },  // Yahoo doesn't have 4h, we use 1h with wider range
+  'H4':  { interval: '1h',  range: '60d', aggregateTo: '4h' },  // Fetch 1h, aggregate to 4h
   'D1':  { interval: '1d',  range: '6mo' },
 };
 
-// Price cache (3 minute TTL)
+// Price cache (1 minute TTL - reduced for better accuracy)
 const priceCache: Record<string, { data: MarketData; expiry: number }> = {};
-const CACHE_TTL = 3 * 60 * 1000;
+const CACHE_TTL = 1 * 60 * 1000;
 
-// OHLCV cache (2 minute TTL - shorter for intraday)
+// OHLCV cache (1 minute TTL - short for intraday accuracy)
 const ohlcvCache: Record<string, { data: OHLCVData; expiry: number }> = {};
-const OHLCV_CACHE_TTL = 2 * 60 * 1000;
+const OHLCV_CACHE_TTL = 1 * 60 * 1000;
 
 // Yahoo Finance symbol mapping
 const YAHOO_SYMBOLS: Record<string, string> = {
@@ -114,7 +120,62 @@ function buildMarketData(pair: string, price: number, source: string, extra?: Pa
     low: extra?.low ?? parseFloat((price - dailyRange * 0.5).toFixed(decimals)),
     timestamp: new Date().toISOString(),
     source,
+    delay: extra?.delay,
   };
+}
+
+// ─── Aggregate 1h candles into 4h candles ─────────────────────────────
+// Forex 4h candles align to: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
+function aggregateTo4hCandles(candles: OHLCVCandle[]): OHLCVCandle[] {
+  if (candles.length === 0) return [];
+
+  // Group candles by their 4-hour block
+  const groups: Map<number, OHLCVCandle[]> = new Map();
+
+  for (const candle of candles) {
+    const date = new Date(candle.timestamp);
+    const hourUTC = date.getUTCHours();
+    // Determine which 4-hour block this candle belongs to
+    const blockHour = Math.floor(hourUTC / 4) * 4; // 0, 4, 8, 12, 16, 20
+    const blockDate = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      blockHour,
+      0, 0, 0
+    ));
+    const blockKey = blockDate.getTime();
+
+    if (!groups.has(blockKey)) {
+      groups.set(blockKey, []);
+    }
+    groups.get(blockKey)!.push(candle);
+  }
+
+  // Aggregate each group into a single 4h candle
+  const result: OHLCVCandle[] = [];
+  const sortedKeys = Array.from(groups.keys()).sort((a, b) => a - b);
+
+  for (const key of sortedKeys) {
+    const group = groups.get(key)!;
+    if (group.length === 0) continue;
+
+    // Sort group by timestamp
+    group.sort((a, b) => a.timestamp - b.timestamp);
+
+    const aggregated: OHLCVCandle = {
+      timestamp: key, // Start of the 4h block
+      open: group[0].open,              // First candle's open
+      high: Math.max(...group.map(c => c.high)),   // Highest high
+      low: Math.min(...group.map(c => c.low)),     // Lowest low
+      close: group[group.length - 1].close,         // Last candle's close
+      volume: group.reduce((sum, c) => sum + (c.volume || 0), 0), // Sum of volumes
+    };
+
+    result.push(aggregated);
+  }
+
+  return result;
 }
 
 // ─── Fetch OHLCV Data for specific timeframe ──────────────────────────
@@ -133,12 +194,14 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
   const intervalConfig = YAHOO_INTERVAL_MAP[timeframe] || YAHOO_INTERVAL_MAP['H4'];
 
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${intervalConfig.interval}&range=${intervalConfig.range}`;
+    // Use v8 chart API with includePrePost=false for cleaner data
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${intervalConfig.interval}&range=${intervalConfig.range}&includePrePost=false`;
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
       },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
@@ -166,7 +229,7 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
     }
 
     // Parse candles
-    const candles: OHLCVCandle[] = [];
+    let candles: OHLCVCandle[] = [];
     for (let i = 0; i < timestamps.length; i++) {
       const o = opens[i];
       const h = highs[i];
@@ -185,6 +248,23 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
       });
     }
 
+    // ─── KEY FIX: Aggregate 1h candles into 4h candles for H4 timeframe ───
+    if (intervalConfig.aggregateTo === '4h' && candles.length > 0) {
+      candles = aggregateTo4hCandles(candles);
+      console.log(`[Market Data] Aggregated ${candles.length} 4h candles for ${pair} H4`);
+    }
+
+    // Determine data delay
+    const marketState = meta?.marketState; // "REGULAR", "CLOSED", "PRE", "POST"
+    let delay = '~15min';
+    if (marketState === 'REGULAR') {
+      delay = 'Real-time';
+    } else if (marketState === 'CLOSED') {
+      delay = 'Market Closed';
+    } else if (marketState === 'PRE' || marketState === 'POST') {
+      delay = '~15min delayed';
+    }
+
     const prevClose = meta?.chartPreviousClose || meta?.previousClose || currentPrice;
     const change = currentPrice - prevClose;
     const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
@@ -198,7 +278,8 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
       dayLow: meta?.regularMarketDayLow || (candles.length > 0 ? Math.min(...candles.map(c => c.low)) : currentPrice),
       change: parseFloat(change.toFixed(4)),
       changePercent: parseFloat(changePercent.toFixed(2)),
-      source: 'Yahoo Finance',
+      source: intervalConfig.aggregateTo ? `Yahoo Finance (1h→4h aggregated)` : 'Yahoo Finance',
+      delay,
     };
 
     ohlcvCache[cacheKey] = { data: ohlcvData, expiry: Date.now() + OHLCV_CACHE_TTL };
@@ -291,6 +372,7 @@ function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
     change: 0,
     changePercent: 0,
     source: 'Fallback (simulated)',
+    delay: 'Simulated data',
   };
 }
 
@@ -299,10 +381,12 @@ async function fetchFromYahooFinance(pair: string): Promise<MarketData | null> {
   if (!yahooSymbol) return null;
 
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`;
+    // Use shorter interval for more accurate current price
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=1d&includePrePost=false`;
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
       },
       signal: AbortSignal.timeout(10000),
     });
@@ -324,11 +408,23 @@ async function fetchFromYahooFinance(pair: string): Promise<MarketData | null> {
     const change = price - prevClose;
     const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
+    // Determine delay
+    const marketState = meta?.marketState;
+    let delay = '~15min';
+    if (marketState === 'REGULAR') {
+      delay = 'Real-time';
+    } else if (marketState === 'CLOSED') {
+      delay = 'Market Closed';
+    } else if (marketState === 'PRE' || marketState === 'POST') {
+      delay = '~15min delayed';
+    }
+
     return buildMarketData(pair, price, 'Yahoo Finance', {
       high: meta?.regularMarketDayHigh || undefined,
       low: meta?.regularMarketDayLow || undefined,
       change: parseFloat(change.toFixed(4)),
       changePercent: parseFloat(changePercent.toFixed(2)),
+      delay,
     });
   } catch (error) {
     console.error(`Yahoo Finance fetch failed for ${pair}:`, error);
@@ -372,7 +468,7 @@ async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
     const price = parseFloat(data?.price);
     if (isNaN(price) || !isValidPrice(pair, price)) return null;
 
-    return buildMarketData(pair, price, 'Twelve Data');
+    return buildMarketData(pair, price, 'Twelve Data', { delay: 'Real-time' });
   } catch (error) {
     console.error(`Twelve Data fetch failed for ${pair}:`, error);
     return null;

@@ -138,6 +138,8 @@ Be concise and professional. Use specific ICT Core Content month references. Res
           close: c.close,
           volume: c.volume,
         })),
+        dataSource: ohlcvData.source,
+        dataDelay: ohlcvData.delay,
       },
       timestamp: new Date().toISOString(),
     });

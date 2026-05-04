@@ -32,6 +32,8 @@ interface ChartData {
   ictElements: string[];
   changePercent: number;
   candles?: OHLCVCandle[];
+  dataSource?: string; // e.g. 'Yahoo Finance', 'Fallback (simulated)'
+  dataDelay?: string; // e.g. 'Real-time', '~15min delayed'
 }
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -701,12 +703,20 @@ function drawChart(
 
   ctx.textBaseline = 'alphabetic';
 
-  // ─── Watermark ───────────────────────────────────────────────────
+  // ─── Watermark / Data Source ────────────────────────────────────────
   ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx.fillStyle = '#2a2e39';
   ctx.textAlign = 'center';
-  const dataSource = config.candles && config.candles.length > 5 ? 'Yahoo Finance Live Data' : 'Simulated Data';
-  ctx.fillText(`TradingView \u2022 ICT Pro Bot \u2022 ${dataSource}`, W / 2, panelY - 4);
+  const srcLabel = config.dataSource || (config.candles && config.candles.length > 5 ? 'Yahoo Finance' : 'Simulated');
+  const delayLabel = config.dataDelay || '';
+  const srcColor = srcLabel.includes('Simulated') || srcLabel.includes('Fallback') ? '#ff5252' : delayLabel === 'Real-time' ? '#4caf50' : '#ff9800';
+  // Source text
+  ctx.fillStyle = '#2a2e39';
+  ctx.fillText(`TradingView \u2022 ICT Pro Bot \u2022 ${srcLabel}`, W / 2, panelY - 16);
+  // Delay indicator
+  if (delayLabel) {
+    ctx.fillStyle = srcColor;
+    ctx.fillText(delayLabel, W / 2, panelY - 5);
+  }
   ctx.textAlign = 'left';
 
   // ─── Chart Border ────────────────────────────────────────────────

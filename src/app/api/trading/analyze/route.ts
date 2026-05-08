@@ -191,14 +191,35 @@ function generateLocalAnalysis(
     candleDesc = `Price in the upper-middle zone could form an Evening Star pattern (3-candle: long white → small gap up → black candle below midpoint). This is one of the strongest bearish reversal signals per Tam's book.`;
   }
 
-  // ICT Analysis
+  // ICT/SMC Analysis
   const isDiscount = posNum < 50;
-  const ictAnalysis = `${isDiscount ? '✅ Discount Zone' : '⚠️ Premium Zone'} — Price is ${isDiscount ? 'in the lower 50% of the range, favorable for buying per ICT methodology' : 'in the upper 50% of the range, wait for correction to discount zone'}.
+  const utcHour = new Date().getUTCHours();
+  const utc2Hour = (utcHour + 2) % 24;
+  let smcSession = 'Off-Session';
+  if (utc2Hour >= 2 && utc2Hour < 8) smcSession = 'Asian Session (Accumulation)';
+  else if (utc2Hour >= 9 && utc2Hour < 12) smcSession = 'London Open (Manipulation)';
+  else if (utc2Hour >= 14 && utc2Hour < 17) smcSession = 'NY Open (Distribution)';
 
-🏦 Order Block: ${isDiscount ? 'Look for Bullish OB below current price — last bearish candle before the strong bullish move' : 'Look for Bearish OB above current price — last bullish candle before the strong bearish move'}
-💧 Fair Value Gap (FVG): ${posNum < 35 ? 'Bullish FVG likely below — price tends to return to fill the gap before continuing up' : posNum > 65 ? 'Bearish FVG likely above — price tends to return to fill the gap before continuing down' : 'Monitor for FVG formation on lower timeframes'}
-🎯 Liquidity: ${isDiscount ? 'Sell Side Liquidity (SSL) below daily low — smart money targets these sell stops before reversing' : 'Buy Side Liquidity (BSL) above daily high — smart money targets these buy stops before reversing'}
-📊 AMD Pattern: ${isDiscount ? 'Likely in Accumulation/Manipulation phase — watch for false breakdown then Distribution upward' : 'Likely in Distribution phase — watch for Manipulation above highs then reversal'}`;
+  // SMC liquidity levels to watch
+  const bslTargets = 'PMH, PWH, PDH, HOD, Old High, Equal Highs';
+  const sslTargets = 'PML, PWL, PDL, LOD, Old Low, Equal Lows';
+
+  // SMC Setup identification
+  let smcSetup = '';
+  if (posNum < 20) smcSetup = 'Turtle Soup Long — SSL swept below range, reversal expected up';
+  else if (posNum > 80) smcSetup = 'Turtle Soup Short — BSL swept above range, reversal expected down';
+  else if (posNum < 35) smcSetup = 'SH + BMS + RTO (Bullish) — Stop Hunt below + BMS confirms + Return to OB for buy';
+  else if (posNum > 65) smcSetup = 'SH + BMS + RTO (Bearish) — Stop Hunt above + BMS confirms + Return to OB for sell';
+  else smcSetup = 'SMS + BMS + RTO — Failure Swing detected, wait for BMS + RTO confirmation';
+
+  const ictAnalysis = `${isDiscount ? '✅ Discount Zone' : '⚠️ Premium Zone'} — Price is ${isDiscount ? 'in the lower 50% of the range, favorable for buying per ICT/SMC methodology' : 'in the upper 50% of the range, wait for correction to discount zone'}.
+
+🏦 Order Block: ${isDiscount ? 'Look for Bullish OB below current price — last bearish candle before the strong bullish move that caused BMS. OB must be validated by BMS — no BMS = no valid OB (SMC rule).' : 'Look for Bearish OB above current price — last bullish candle before the strong bearish move that caused BMS. OB must be validated by BMS.'}
+💧 Fair Value Gap (FVG): ${posNum < 35 ? 'Bullish FVG likely below — price tends to return to fill the gap before continuing up (RTO setup)' : posNum > 65 ? 'Bearish FVG likely above — price tends to return to fill the gap before continuing down (RTO setup)' : 'Monitor for FVG formation on lower timeframes'}
+🎯 Liquidity: ${isDiscount ? `Sell Side Liquidity (SSL) targets: ${sslTargets}. Smart money sweeps these levels before reversing up.` : `Buy Side Liquidity (BSL) targets: ${bslTargets}. Smart money sweeps these levels before reversing down.`}
+📊 AMD Pattern: ${isDiscount ? 'Likely in Accumulation/Manipulation phase — watch for false breakdown then Distribution upward' : 'Likely in Distribution phase — watch for Manipulation above highs then reversal'}
+⏱️ SMC Session: ${smcSession}
+📋 SMC Setup: ${smcSetup}`;
 
   // Support & Resistance
   const support1 = currentPrice - range * 0.382;
@@ -227,20 +248,31 @@ ${candleDesc}
 📈 MACD: ${macdSignal}
 📊 MA: ${maSignal}
 
-━━━ 🏦 ICT Smart Money Analysis ━━━
+━━━ 🏦 ICT/SMC Smart Money Analysis ━━━
 ${ictAnalysis}
 
 ━━━ 🎯 Key Levels ━━━
 Support 1: ${support1.toFixed(decimals)} (38.2% Fib)
-Support 2: ${support2.toFixed(decimals)} (Daily Low)
+Support 2: ${support2.toFixed(decimals)} (Daily Low = PDL/LOD — SMC SSL target)
 Resistance 1: ${resistance1.toFixed(decimals)} (38.2% Fib)
-Resistance 2: ${resistance2.toFixed(decimals)} (Daily High)
-OTE Zone: ${fib61_8.toFixed(decimals)} (61.8%-79% Fib — Optimal Trade Entry)
+Resistance 2: ${resistance2.toFixed(decimals)} (Daily High = PDH/HOD — SMC BSL target)
+OTE Zone: ${fib61_8.toFixed(decimals)} - ${(fib61_8 - range * 0.172).toFixed(decimals)} (0.618-0.79 Fib — Optimal Trade Entry per SMC)
+Fibonacci Levels: 50% (${(currentPrice - range * 0.5 * (isDiscount ? 1 : -1)).toFixed(decimals)}) | 61.8% | 70.5% | 79%
+
+━━━ 📋 SMC Confluence Checklist ━━━
+${isDiscount ? '✅' : '❌'} Price in Discount Zone (buy zone)
+${detectedTrend.includes('Bullish') || detectedTrend.includes('Potentially Bullish') ? '✅' : '❌'} HTF BMS ${isDiscount ? 'Bullish' : 'Bearish'}
+✅ ${smcSession}
+${posNum < 30 || posNum > 70 ? '✅' : '❌'} Liquidity Sweep (${isDiscount ? 'SSL at ' + sslTargets : 'BSL at ' + bslTargets})
+❓ OB validated by BMS (confirm on chart)
+❓ FVG formed after MSS
+❓ Entry at OTE zone (0.618-0.79 Fib)
+Minimum 2 confluences required per SMC methodology.
 
 ━━━ 💡 ${modeLabel} Recommendation ━━━
-${detectedTrend.includes('Bullish') ? `🟢 Look for BUY setups at support levels. Best entry in OTE zone (${fib61_8.toFixed(decimals)}). Wait for MSS + FVG confirmation.` : detectedTrend.includes('Bearish') ? `🔴 Look for SELL setups at resistance levels. Best entry in OTE zone (${resistance1.toFixed(decimals)}-${resistance2.toFixed(decimals)}). Wait for MSS + FVG confirmation.` : `⏳ Wait for clear directional confirmation. Watch for liquidity sweep + MSS + FVG before entering.`}
+${detectedTrend.includes('Bullish') ? `🟢 Look for BUY setups at support levels. Best entry in OTE zone (0.618-0.79 Fib). After BMS, wait for Retracement to 50%/OTE — never enter immediately (SMC rule). Wait for SH (Stop Hunt) + BMS + RTO to OB. ${smcSession}.` : detectedTrend.includes('Bearish') ? `🔴 Look for SELL setups at resistance levels. Best entry in OTE zone (0.618-0.79 Fib). After BMS, wait for Retracement to 50%/OTE. Wait for SH + BMS + RTO to OB. ${smcSession}.` : `⏳ Wait for clear directional confirmation. The market HARDLY reverses without taking liquidity first (SMC rule). Watch for liquidity sweep + BMS + RTO before entering. ${smcSession}.`}
 
-⚠️ ${modeLabel} risk max ${riskMax} per trade. R:R minimum 1:2. This is educational analysis only.`;
+⚠️ ${modeLabel} risk max ${riskMax} per trade. R:R minimum 1:2. After BMS ALWAYS wait for Retracement. This is educational analysis only.`;
 }
 
 // ─── ICT Instrument Tier Classification ───────────────────────────────

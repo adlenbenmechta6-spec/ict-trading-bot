@@ -3,6 +3,7 @@ import { chatCompletion } from '@/lib/ai';
 import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
 import { ICT_SIGNAL_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
 import { ICT_BEST_INSTRUMENTS } from '@/lib/ict-core-content';
+import { SMC_SETUPS, SMC_CONFLUENCE_FACTORS } from '@/lib/smc-knowledge';
 
 export const maxDuration = 30;
 
@@ -236,35 +237,62 @@ function generateFallbackSignal(
   else if (hour >= 17 && hour <= 19) killZone = 'New York PM Kill Zone';
   else if (hour >= 19 && hour <= 22) killZone = 'Asian Kill Zone';
 
-  // Mode-specific patterns and elements
+  // SMC-specific: Determine which setup applies based on market conditions
+  const smcSetup = determineSMCSetup(isBuy, position, mode);
+
+  // Determine SMC liquidity level being targeted
+  const liquidityTarget = isBuy
+    ? (position < 0.25 ? 'PDL/LOD (SSL pool)' : position < 0.5 ? 'Old Low/Equal Lows (SSL)' : 'PWL/PML (SSL)')
+    : (position > 0.75 ? 'PDH/HOD (BSL pool)' : position > 0.5 ? 'Old High/Equal Highs (BSL)' : 'PWH/PMH (BSL)');
+
+  // Determine SMC session phase
+  const utcHour = new Date().getUTCHours();
+  const utc2Hour = (utcHour + 2) % 24; // UTC+2 as per SMC book
+  let smcSession = 'Off-Session';
+  if (utc2Hour >= 2 && utc2Hour < 8) smcSession = 'Asian (Accumulation)';
+  else if (utc2Hour >= 9 && utc2Hour < 12) smcSession = 'London Open (Manipulation)';
+  else if (utc2Hour >= 14 && utc2Hour < 17) smcSession = 'NY Open (Distribution)';
+
+  // OTE zone calculation (0.618 - 0.79 Fib retracement)
+  const oteZone = isBuy
+    ? `${(currentPrice - range * 0.79).toFixed(decimals)} - ${(currentPrice - range * 0.618).toFixed(decimals)}`
+    : `${(currentPrice + range * 0.618).toFixed(decimals)} - ${(currentPrice + range * 0.79).toFixed(decimals)}`;
+
+  // Mode-specific patterns and elements with SMC integration
   let pattern: string;
   let ictElements: string[];
   let analysis: string;
 
   if (mode === 'scalping') {
-    pattern = isBuy ? 'Micro Bullish Engulfing + Hammer' : 'Micro Bearish Engulfing + Shooting Star';
+    pattern = isBuy ? `${smcSetup} + Micro Bullish Engulfing` : `${smcSetup} + Micro Bearish Engulfing`;
     ictElements = [
-      isBuy ? 'Micro Bullish OB (1m/5m)' : 'Micro Bearish OB (1m/5m)',
+      isBuy ? 'Micro Bullish OB (M1/M5)' : 'Micro Bearish OB (M1/M5)',
       isBuy ? 'Micro Bullish FVG' : 'Micro Bearish FVG',
       isBuy ? 'SSL Sweep (micro)' : 'BSL Sweep (micro)',
+      `SMC Session: ${smcSession}`,
     ];
-    analysis = aiText || `⚡ SCALP ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${entry.toFixed(decimals)} (${timeframe}). Quick ${isBuy ? 'long' : 'short'} targeting ${tp1.toFixed(decimals)}. Tight SL at ${sl.toFixed(decimals)}. ${killZone} active. Hold seconds-minutes. Risk max 0.5%.`;
+    analysis = aiText || `⚡ SCALP ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${entry.toFixed(decimals)} (${timeframe}). ${smcSetup} confirmed. ${isBuy ? 'SSL' : 'BSL'} swept at ${liquidityTarget}. OTE zone: ${oteZone}. ${killZone} active. ${smcSession} phase. Tight SL at ${sl.toFixed(decimals)}. Risk max 0.5%.`;
   } else if (mode === 'daytrading') {
-    pattern = isBuy ? 'Bullish Engulfing + Morning Star' : 'Bearish Engulfing + Evening Star';
+    pattern = isBuy ? `${smcSetup} + Bullish Engulfing` : `${smcSetup} + Bearish Engulfing`;
     ictElements = [
-      isBuy ? 'Intraday Bullish OB (15m/30m)' : 'Intraday Bearish OB (15m/30m)',
+      isBuy ? 'Intraday Bullish OB (M15/M30)' : 'Intraday Bearish OB (M15/M30)',
       isBuy ? 'Intraday Bullish FVG' : 'Intraday Bearish FVG',
-      isBuy ? 'SSL Sweep' : 'BSL Sweep',
+      isBuy ? `SSL Sweep (${liquidityTarget})` : `BSL Sweep (${liquidityTarget})`,
+      `BMS ${isBuy ? 'Bullish' : 'Bearish'} confirmed`,
+      `SMC Session: ${smcSession}`,
     ];
-    analysis = aiText || `📊 DAY TRADE ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${entry.toFixed(decimals)} (${timeframe}). Intraday ${isBuy ? 'long' : 'short'} targeting ${tp1.toFixed(decimals)}. SL at ${sl.toFixed(decimals)}. ${killZone} active. Close before EOD. Risk max 1%.`;
+    analysis = aiText || `📊 DAY TRADE ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${entry.toFixed(decimals)} (${timeframe}). ${smcSetup} — ${isBuy ? 'SSL swept at ' + liquidityTarget + ', BMS confirmed bullish' : 'BSL swept at ' + liquidityTarget + ', BMS confirmed bearish'}. RTO to OB for entry. OTE zone: ${oteZone}. ${smcSession} phase. SL at ${sl.toFixed(decimals)}. Close before EOD. Risk max 1%.`;
   } else {
-    pattern = isBuy ? 'Hammer + Bullish Engulfing Setup' : 'Hanging Man + Bearish Engulfing Setup';
+    pattern = isBuy ? `${smcSetup} + Hammer Setup` : `${smcSetup} + Hanging Man Setup`;
     ictElements = [
-      isBuy ? 'Bullish Order Block (H4/Daily)' : 'Bearish Order Block (H4/Daily)',
+      isBuy ? 'HTF Bullish OB (H4/Daily)' : 'HTF Bearish OB (H4/Daily)',
       isBuy ? 'Bullish FVG (support)' : 'Bearish FVG (resistance)',
-      isBuy ? 'SSL Sweep' : 'BSL Sweep',
+      isBuy ? `SSL Sweep (${liquidityTarget})` : `BSL Sweep (${liquidityTarget})`,
+      `BMS ${isBuy ? 'Bullish' : 'Bearish'} on HTF`,
+      `Price in ${isBuy ? 'Discount' : 'Premium'} zone`,
+      `OTE: ${oteZone}`,
     ];
-    analysis = aiText || `📅 SWING ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${entry.toFixed(decimals)} (${timeframe}). Multi-day ${isBuy ? 'long' : 'short'} targeting ${tp1.toFixed(decimals)}. SL at ${sl.toFixed(decimals)}. ${killZone} active. R:R ${rr.toFixed(1)}:1. Risk max 2%.`;
+    analysis = aiText || `📅 SWING ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${entry.toFixed(decimals)} (${timeframe}). ${smcSetup} — ${isBuy ? 'HTF SSL swept, BMS confirmed bullish, RTO to OB in discount zone' : 'HTF BSL swept, BMS confirmed bearish, RTO to OB in premium zone'}. Liquidity target: ${liquidityTarget}. OTE: ${oteZone}. R:R ${rr.toFixed(1)}:1. Risk max 2%. The market hardly reverses without taking liquidity!`;
   }
 
   return {
@@ -282,8 +310,23 @@ function generateFallbackSignal(
     riskReward: `1:${rr.toFixed(1)}`,
     ictElements,
     killZone,
-    liquidityType: isBuy ? 'Sell Side Liquidity (SSL)' : 'Buy Side Liquidity (BSL)',
+    liquidityType: isBuy ? `Sell Side Liquidity (SSL) — ${liquidityTarget}` : `Buy Side Liquidity (BSL) — ${liquidityTarget}`,
     pdZone: isBuy ? 'Discount Zone (below 50%)' : 'Premium Zone (above 50%)',
     analysis,
   };
+}
+
+// ─── SMC Setup Determination ──────────────────────────────────────────
+function determineSMCSetup(isBuy: boolean, position: number, mode: string): string {
+  // Determine which SMC setup (from WADE_FX_SETUPS) best fits the current conditions
+  if (position < 0.2 || position > 0.8) {
+    // Price at extremes — likely Stop Hunt / Turtle Soup
+    return isBuy ? SMC_SETUPS.TURTLE_SOUP_LONG : SMC_SETUPS.TURTLE_SOUP_SHORT;
+  } else if (position < 0.35 || position > 0.65) {
+    // Price near extremes with clear BMS — SH + BMS + RTO
+    return isBuy ? SMC_SETUPS.SH_BMS_RTO_BULL : SMC_SETUPS.SH_BMS_RTO_BEAR;
+  } else {
+    // Price in mid-range — likely SMS + BMS + RTO or AMD
+    return isBuy ? SMC_SETUPS.SMS_BMS_RTO_BULL : SMC_SETUPS.SMS_BMS_RTO_BEAR;
+  }
 }

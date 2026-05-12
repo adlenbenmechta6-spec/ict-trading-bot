@@ -1,10 +1,147 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
-import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
+import { fetchRealPrice, fetchOHLCVData, OHLCVCandle } from '@/lib/market-data';
 import { ICT_ANALYSIS_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
 
 export const maxDuration = 30;
 
+// ─── TREND ANALYSIS ENGINE (shared with signal route) ─────────────────
+interface TrendAnalysis {
+  direction: 'bullish' | 'bearish' | 'ranging';
+  strength: number;
+  ema20: number;
+  ema50: number;
+  rsi: number;
+  structure: 'HH/HL' | 'LH/LL' | 'Ranging';
+  lastSwingHigh: number;
+  lastSwingLow: number;
+  trendConfluence: number;
+  reasoning: string;
+}
+
+function analyzeTrend(candles: OHLCVCandle[], currentPrice: number): TrendAnalysis {
+  if (candles.length < 20) {
+    return {
+      direction: 'ranging', strength: 30, ema20: currentPrice, ema50: currentPrice,
+      rsi: 50, structure: 'Ranging', lastSwingHigh: currentPrice, lastSwingLow: currentPrice,
+      trendConfluence: 0, reasoning: 'Insufficient candle data',
+    };
+  }
+
+  const closes = candles.map(c => c.close);
+  const ema20 = calculateEMA(closes, 20);
+  const ema50 = calculateEMA(closes, 50);
+  const rsi = calculateRSI(closes, 14);
+  const { structure, lastSwingHigh, lastSwingLow } = analyzeMarketStructure(candles);
+
+  const aboveEma20 = currentPrice > ema20;
+  const aboveEma50 = currentPrice > ema50;
+
+  const recentCandles = candles.slice(-5);
+  const prevCandles = candles.slice(-10, -5);
+  const recentMomentum = recentCandles.reduce((sum, c) => sum + (c.close - c.open), 0);
+  const prevMomentum = prevCandles.reduce((sum, c) => sum + (c.close - c.open), 0);
+  const momentumBullish = recentMomentum > 0 && recentMomentum > prevMomentum * 0.5;
+
+  let bullishVotes = 0, bearishVotes = 0;
+
+  if (ema20 > ema50 && aboveEma20) bullishVotes++;
+  if (ema20 < ema50 && !aboveEma20) bearishVotes++;
+  if (aboveEma20 && aboveEma50) bullishVotes++;
+  if (!aboveEma20 && !aboveEma50) bearishVotes++;
+  if (structure === 'HH/HL') bullishVotes++;
+  if (structure === 'LH/LL') bearishVotes++;
+  if (momentumBullish) bullishVotes++;
+  if (!momentumBullish && recentMomentum < 0) bearishVotes++;
+  if (rsi > 50 && rsi < 75) bullishVotes++;
+  if (rsi < 50 && rsi > 25) bearishVotes++;
+
+  let direction: 'bullish' | 'bearish' | 'ranging';
+  let strength: number;
+  let trendConfluence: number;
+
+  if (bullishVotes >= 3 && bullishVotes > bearishVotes) {
+    direction = 'bullish';
+    strength = Math.min(95, 50 + (bullishVotes - bearishVotes) * 12);
+    trendConfluence = bullishVotes;
+  } else if (bearishVotes >= 3 && bearishVotes > bullishVotes) {
+    direction = 'bearish';
+    strength = Math.min(95, 50 + (bearishVotes - bullishVotes) * 12);
+    trendConfluence = bearishVotes;
+  } else {
+    direction = 'ranging';
+    strength = 30;
+    trendConfluence = Math.max(bullishVotes, bearishVotes);
+  }
+
+  const reasoning = `EMA20 ${ema20.toFixed(2)} | EMA50 ${ema50.toFixed(2)} | Structure: ${structure} | RSI: ${rsi.toFixed(0)} | Momentum: ${momentumBullish ? 'Bullish' : 'Bearish'} | Bull=${bullishVotes} Bear=${bearishVotes}`;
+
+  return { direction, strength, ema20, ema50, rsi, structure, lastSwingHigh, lastSwingLow, trendConfluence, reasoning };
+}
+
+function calculateEMA(data: number[], period: number): number {
+  if (data.length < period) return data[data.length - 1] || 0;
+  const multiplier = 2 / (period + 1);
+  let ema = data.slice(0, period).reduce((sum, val) => sum + val, 0) / period;
+  for (let i = period; i < data.length; i++) {
+    ema = (data[i] - ema) * multiplier + ema;
+  }
+  return ema;
+}
+
+function calculateRSI(data: number[], period: number = 14): number {
+  if (data.length < period + 1) return 50;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = data[i] - data[i - 1];
+    if (change > 0) gains += change; else losses -= change;
+  }
+  let avgGain = gains / period, avgLoss = losses / period;
+  for (let i = period + 1; i < data.length; i++) {
+    const change = data[i] - data[i - 1];
+    avgGain = (avgGain * (period - 1) + (change > 0 ? change : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (change < 0 ? -change : 0)) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - (100 / (1 + avgGain / avgLoss));
+}
+
+function analyzeMarketStructure(candles: OHLCVCandle[]): {
+  structure: 'HH/HL' | 'LH/LL' | 'Ranging';
+  lastSwingHigh: number; lastSwingLow: number;
+} {
+  const recent = candles.slice(-30);
+  const swingHighs: number[] = [], swingLows: number[] = [];
+
+  for (let i = 2; i < recent.length - 2; i++) {
+    if (recent[i].high > recent[i-1].high && recent[i].high > recent[i-2].high &&
+        recent[i].high > recent[i+1].high && recent[i].high > recent[i+2].high) {
+      swingHighs.push(recent[i].high);
+    }
+    if (recent[i].low < recent[i-1].low && recent[i].low < recent[i-2].low &&
+        recent[i].low < recent[i+1].low && recent[i].low < recent[i+2].low) {
+      swingLows.push(recent[i].low);
+    }
+  }
+
+  const lastSwingHigh = swingHighs.length > 0 ? swingHighs[swingHighs.length - 1] : Math.max(...recent.slice(-10).map(c => c.high));
+  const lastSwingLow = swingLows.length > 0 ? swingLows[swingLows.length - 1] : Math.min(...recent.slice(-10).map(c => c.low));
+
+  let structure: 'HH/HL' | 'LH/LL' | 'Ranging' = 'Ranging';
+  if (swingHighs.length >= 2 && swingLows.length >= 2) {
+    const recentHighs = swingHighs.slice(-3), recentLows = swingLows.slice(-3);
+    const higherHighs = recentHighs.length >= 2 && recentHighs[recentHighs.length - 1] > recentHighs[recentHighs.length - 2];
+    const higherLows = recentLows.length >= 2 && recentLows[recentLows.length - 1] > recentLows[recentLows.length - 2];
+    const lowerHighs = recentHighs.length >= 2 && recentHighs[recentHighs.length - 1] < recentHighs[recentHighs.length - 2];
+    const lowerLows = recentLows.length >= 2 && recentLows[recentLows.length - 1] < recentLows[recentLows.length - 2];
+    if (higherHighs && higherLows) structure = 'HH/HL';
+    else if (lowerHighs && lowerLows) structure = 'LH/LL';
+  }
+
+  return { structure, lastSwingHigh, lastSwingLow };
+}
+
+// ─── MAIN ANALYSIS ENDPOINT ───────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -28,14 +165,36 @@ export async function POST(req: NextRequest) {
     const dayLow = marketData.low || ohlcvData.dayLow;
     const changePercent = marketData.changePercent || ohlcvData.changePercent;
 
+    // ─── CRITICAL FIX: Analyze REAL trend from OHLCV candles ────────
+    const trendAnalysis = analyzeTrend(ohlcvData.candles, currentPrice);
+
     // Mode-specific analysis label
     const modeLabel = mode === 'scalping' ? 'Scalping' : mode === 'daytrading' ? 'Day Trading' : 'Swing Trading';
+
+    // ─── CRITICAL FIX: Pass trend analysis to AI ────────────────────
+    const trendContext = `
+=== TREND ANALYSIS (FROM REAL OHLCV DATA) ===
+Current Trend: ${trendAnalysis.direction.toUpperCase()} (Strength: ${trendAnalysis.strength}/100)
+Market Structure: ${trendAnalysis.structure}
+EMA 20: ${trendAnalysis.ema20.toFixed(pair === 'XAU/USD' ? 2 : pair.includes('JPY') ? 3 : 5)}
+EMA 50: ${trendAnalysis.ema50.toFixed(pair === 'XAU/USD' ? 2 : pair.includes('JPY') ? 3 : 5)}
+RSI (14): ${trendAnalysis.rsi.toFixed(1)}
+Last Swing High: ${trendAnalysis.lastSwingHigh.toFixed(pair === 'XAU/USD' ? 2 : pair.includes('JPY') ? 3 : 5)}
+Last Swing Low: ${trendAnalysis.lastSwingLow.toFixed(pair === 'XAU/USD' ? 2 : pair.includes('JPY') ? 3 : 5)}
+Trend Confluence Score: ${trendAnalysis.trendConfluence}/5
+Analysis: ${trendAnalysis.reasoning}
+
+*** CRITICAL: Base your analysis on this trend data. If trend is BULLISH, recommend BUY setups. If BEARISH, recommend SELL setups. ***
+*** Do NOT use mean reversion logic. Follow the trend direction. ***
+`;
 
     const aiAnalysis = await chatCompletion({
       systemPrompt: `${ICT_ANALYSIS_SYSTEM_PROMPT}
 
 You are reading the TradingView chart for ${pair} on ${timeframe} timeframe right now.
 The live price from TradingView is: ${currentPrice}
+
+${trendContext}
 
 This is a ${modeLabel} analysis on ${timeframe}.
 
@@ -55,33 +214,25 @@ Analyze as if you are looking at the TradingView chart. Provide:
 4. TradingView indicators (RSI, MACD, Moving Averages, Bollinger Bands)
 5. Support & Resistance with OTE zone (61.8%-79% retracement)
 6. ICT Confluence Score (1-10): HTF bias + Premium/Discount + OB + FVG + Liquidity Sweep + MSS + Kill Zone
-7. Trading recommendation appropriate for ${modeLabel}
+7. Trading recommendation appropriate for ${modeLabel} — MUST follow the trend direction above
 
 ${mode === 'scalping' ? 'Focus on micro-level patterns (Month 8-9): OSOK model, Silver Bullet windows, M5/M1 OB and FVG. Quick in-and-out trades during Kill Zones.' : mode === 'daytrading' ? 'Focus on intraday momentum (Month 8): CBDR, intraday profiles, Bread & Butter setups. All positions should be closed before end of day.' : 'Focus on major structure and multi-day moves (Month 6): HTF OB/FVG, swing conditions, million dollar setup criteria. Wider stops and targets.'}
 
 All prices must be realistic and near the TradingView price of ${currentPrice}.
 Be concise and professional. Use specific ICT Core Content month references. Respond in English.`,
-      userMessage: `${modeLabel} analysis for ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${dayHigh}, Today's low: ${dayLow}. Be concise - 400 words max.`,
-      temperature: 0.7,
+      userMessage: `${modeLabel} analysis for ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${dayHigh}, Today's low: ${dayLow}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%). Follow the trend direction. Be concise - 400 words max.`,
+      temperature: 0.4,
       maxTokens: 600,
     });
 
-    let trend = 'Sideways';
-    if (aiAnalysis) {
-      const lowerText = aiAnalysis.toLowerCase();
-      if ((lowerText.includes('bullish') || lowerText.includes('uptrend')) && !lowerText.includes('not bullish')) {
-        trend = 'Bullish';
-      } else if ((lowerText.includes('bearish') || lowerText.includes('downtrend')) && !lowerText.includes('not bearish')) {
-        trend = 'Bearish';
-      }
-    }
+    // ─── CRITICAL FIX: Use real trend analysis for chart data direction ─
+    const trend = trendAnalysis.direction === 'bullish' ? 'Bullish' : trendAnalysis.direction === 'bearish' ? 'Bearish' : 'Sideways';
 
-    // Generate chart data for analysis with real OHLCV candles
-    const range = dayHigh - dayLow;
-    const position = range > 0 ? (currentPrice - dayLow) / range : 0.5;
-    const isBuy = trend === 'Bullish' || (trend === 'Sideways' && position < 0.4);
+    // Use trend analysis to determine direction (NOT position-based mean reversion)
+    const isBuy = trendAnalysis.direction === 'bullish' || (trendAnalysis.direction === 'ranging' && changePercent > 0.1);
 
     // Adjust ATR multiplier based on mode
+    const range = dayHigh - dayLow;
     const atrMult = mode === 'scalping' ? 0.5 : mode === 'daytrading' ? 0.8 : 1.0;
     const atr = (range > 0 ? range * 0.3 : currentPrice * 0.005) * atrMult;
 
@@ -91,13 +242,13 @@ Be concise and professional. Use specific ICT Core Content month references. Res
       tp1: isBuy ? currentPrice + atr * 2 : currentPrice - atr * 2,
       tp2: isBuy ? currentPrice + atr * 3.5 : currentPrice - atr * 3.5,
       sl: isBuy ? currentPrice - atr : currentPrice + atr,
-      confidence: 65,
+      confidence: Math.min(85, 55 + Math.round(trendAnalysis.strength * 0.2)),
       riskReward: '1:2.0',
       pattern: isBuy ? 'Bullish Setup' : 'Bearish Setup',
       killZone: '',
       liquidityType: isBuy ? 'SSL' : 'BSL',
       pdZone: isBuy ? 'Discount' : 'Premium',
-      ictElements: [isBuy ? 'Bullish OB' : 'Bearish OB'],
+      ictElements: [isBuy ? 'Bullish OB' : 'Bearish OB', `Trend: ${trend} (${trendAnalysis.strength}%)`],
     };
 
     return NextResponse.json({
@@ -109,7 +260,7 @@ Be concise and professional. Use specific ICT Core Content month references. Res
       high: dayHigh,
       low: dayLow,
       changePercent,
-      aiAnalysis: aiAnalysis || generateLocalAnalysis(pair, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, trend, timeframe, mode),
+      aiAnalysis: aiAnalysis || generateLocalAnalysis(pair, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, trend, timeframe, mode, trendAnalysis),
       chartData: {
         pair,
         timeframe,
@@ -129,7 +280,6 @@ Be concise and professional. Use specific ICT Core Content month references. Res
         pdZone: chartData.pdZone,
         ictElements: chartData.ictElements,
         changePercent,
-        // Include real OHLCV candle data for chart rendering
         candles: ohlcvData.candles.slice(-60).map(c => ({
           timestamp: c.timestamp,
           open: c.open,
@@ -140,6 +290,16 @@ Be concise and professional. Use specific ICT Core Content month references. Res
         })),
         dataSource: ohlcvData.source,
         dataDelay: ohlcvData.delay,
+        // Include trend analysis data
+        trend: {
+          direction: trendAnalysis.direction,
+          strength: trendAnalysis.strength,
+          structure: trendAnalysis.structure,
+          ema20: trendAnalysis.ema20,
+          ema50: trendAnalysis.ema50,
+          rsi: trendAnalysis.rsi,
+          confluence: trendAnalysis.trendConfluence,
+        },
       },
       timestamp: new Date().toISOString(),
     });
@@ -149,49 +309,48 @@ Be concise and professional. Use specific ICT Core Content month references. Res
   }
 }
 
+// ─── FIXED LOCAL ANALYSIS (now uses trend data) ──────────────────────
 function generateLocalAnalysis(
   pair: string, currentPrice: number,
   marketData: { high: number; low: number; change: number; changePercent: number }, trend: string,
-  timeframe: string, mode: string
+  timeframe: string, mode: string, trendAnalysis: TrendAnalysis
 ): string {
   const range = marketData.high - marketData.low;
   const position = range > 0 ? ((currentPrice - marketData.low) / range * 100).toFixed(0) : '50';
   const posNum = parseFloat(position);
   const decimals = pair.includes('JPY') || pair === 'XAU/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
 
-  // Determine trend more precisely
-  let detectedTrend = 'Sideways';
+  // ═══════════════════════════════════════════════════════════════════
+  // 🔴 THE BUG WAS HERE — OLD LOGIC used mean reversion:
+  //   if (posNum < 35) → Bullish ← WRONG! Price low ≠ bullish
+  //   if (posNum > 65) → Bearish ← WRONG! Price high ≠ bearish
+  //
+  // ✅ NEW LOGIC: Use real trend analysis from OHLCV candles
+  // ═══════════════════════════════════════════════════════════════════
+  let detectedTrend = trend;
   let trendEmoji = '↔️';
-  if (marketData.changePercent > 0.3) { detectedTrend = 'Bullish'; trendEmoji = '🟢'; }
-  else if (marketData.changePercent < -0.3) { detectedTrend = 'Bearish'; trendEmoji = '🔴'; }
-  else if (posNum < 35) { detectedTrend = 'Potentially Bullish'; trendEmoji = '🟡'; }
-  else if (posNum > 65) { detectedTrend = 'Potentially Bearish'; trendEmoji = '🟡'; }
+  if (trendAnalysis.direction === 'bullish') { detectedTrend = 'Bullish'; trendEmoji = '🟢'; }
+  else if (trendAnalysis.direction === 'bearish') { detectedTrend = 'Bearish'; trendEmoji = '🔴'; }
+  else { detectedTrend = 'Sideways'; trendEmoji = '🟡'; }
+
+  const isBuy = trendAnalysis.direction === 'bullish' || (trendAnalysis.direction === 'ranging' && marketData.changePercent > 0.1);
 
   // Mode label
   const modeLabel = mode === 'scalping' ? '⚡ SCALPING' : mode === 'daytrading' ? '📊 DAY TRADING' : '📅 SWING TRADING';
   const riskMax = mode === 'scalping' ? '0.5%' : mode === 'daytrading' ? '1%' : '2%';
 
-  // Candlestick pattern detection based on price position
+  // Candlestick pattern detection — now context-aware with trend
   let candlePattern = '';
   let candleDesc = '';
-  if (posNum < 25) {
-    candlePattern = 'Hammer / Bullish Engulfing Zone';
-    candleDesc = `Price in the lower ${position}% of daily range suggests potential bullish reversal. Watch for Hammer pattern (small body + long lower shadow) or Bullish Engulfing confirmation. This aligns with Fred K.H. Tam's criteria: after a decline, a long lower shadow signals rejection of lower prices.`;
-  } else if (posNum > 75) {
-    candlePattern = 'Hanging Man / Bearish Engulfing Zone';
-    candleDesc = `Price in the upper ${position}% of daily range suggests potential bearish reversal. Watch for Hanging Man pattern or Bearish Engulfing confirmation. Per Fred K.H. Tam: after an advance, a small body with long lower shadow at the top signals weakening buyers.`;
-  } else if (posNum > 40 && posNum < 60) {
-    candlePattern = 'Doji / Spinning Top Zone';
-    candleDesc = `Price near the middle of the range indicates indecision. Doji patterns (open ≈ close) suggest market uncertainty. Per Tam's methodology: Doji requires confirmation - a white candle after Doji at bottom is bullish; a black candle after Doji at top is bearish.`;
-  } else if (posNum >= 25 && posNum < 40) {
-    candlePattern = 'Morning Star Formation Zone';
-    candleDesc = `Price in the lower-middle zone could form a Morning Star pattern (3-candle: long black → small gap down → white candle above midpoint). This is one of the strongest bullish reversal signals per Tam's book.`;
+  if (isBuy) {
+    candlePattern = 'Bullish Engulfing / Hammer Zone (Trend-Aligned)';
+    candleDesc = `Trend is BULLISH (${trendAnalysis.strength}% strength). Look for continuation patterns: Bullish Engulfing (white candle engulfs previous black) or Hammer (small body + long lower shadow after pullback). Per Tam: in an uptrend, these patterns confirm continuation — the safest trades are WITH the trend.`;
   } else {
-    candlePattern = 'Evening Star Formation Zone';
-    candleDesc = `Price in the upper-middle zone could form an Evening Star pattern (3-candle: long white → small gap up → black candle below midpoint). This is one of the strongest bearish reversal signals per Tam's book.`;
+    candlePattern = 'Bearish Engulfing / Hanging Man Zone (Trend-Aligned)';
+    candleDesc = `Trend is BEARISH (${trendAnalysis.strength}% strength). Look for continuation patterns: Bearish Engulfing (black candle engulfs previous white) or Hanging Man (small body + long lower shadow at resistance). Per Tam: in a downtrend, these patterns confirm continuation — trade WITH the trend.`;
   }
 
-  // ICT/SMC Analysis
+  // ICT/SMC Analysis — now trend-aligned
   const isDiscount = posNum < 50;
   const utcHour = new Date().getUTCHours();
   const utc2Hour = (utcHour + 2) % 24;
@@ -200,24 +359,25 @@ function generateLocalAnalysis(
   else if (utc2Hour >= 9 && utc2Hour < 12) smcSession = 'London Open (Manipulation)';
   else if (utc2Hour >= 14 && utc2Hour < 17) smcSession = 'NY Open (Distribution)';
 
-  // SMC liquidity levels to watch
   const bslTargets = 'PMH, PWH, PDH, HOD, Old High, Equal Highs';
   const sslTargets = 'PML, PWL, PDL, LOD, Old Low, Equal Lows';
 
-  // SMC Setup identification
+  // SMC Setup — now aligned with trend
   let smcSetup = '';
-  if (posNum < 20) smcSetup = 'Turtle Soup Long — SSL swept below range, reversal expected up';
-  else if (posNum > 80) smcSetup = 'Turtle Soup Short — BSL swept above range, reversal expected down';
-  else if (posNum < 35) smcSetup = 'SH + BMS + RTO (Bullish) — Stop Hunt below + BMS confirms + Return to OB for buy';
-  else if (posNum > 65) smcSetup = 'SH + BMS + RTO (Bearish) — Stop Hunt above + BMS confirms + Return to OB for sell';
-  else smcSetup = 'SMS + BMS + RTO — Failure Swing detected, wait for BMS + RTO confirmation';
+  if (isBuy) {
+    smcSetup = 'SH + BMS + RTO (Bullish) — SSL swept + BMS confirms bullish + Return to OB for buy. Trading WITH the uptrend.';
+  } else {
+    smcSetup = 'SH + BMS + RTO (Bearish) — BSL swept + BMS confirms bearish + Return to OB for sell. Trading WITH the downtrend.';
+  }
 
-  const ictAnalysis = `${isDiscount ? '✅ Discount Zone' : '⚠️ Premium Zone'} — Price is ${isDiscount ? 'in the lower 50% of the range, favorable for buying per ICT/SMC methodology' : 'in the upper 50% of the range, wait for correction to discount zone'}.
+  const ictAnalysis = `${isBuy ? '✅ BULLISH Trend' : '⚠️ BEARISH Trend'} — Trend strength: ${trendAnalysis.strength}%, Confluence: ${trendAnalysis.trendConfluence}/5
+📊 EMA20: ${trendAnalysis.ema20.toFixed(decimals)} | EMA50: ${trendAnalysis.ema50.toFixed(decimals)} | ${isBuy ? 'EMA20 > EMA50 (Bullish)' : 'EMA20 < EMA50 (Bearish)'}
+🏗️ Structure: ${trendAnalysis.structure} — ${isBuy ? 'Higher Highs / Higher Lows' : 'Lower Highs / Lower Lows'}
 
-🏦 Order Block: ${isDiscount ? 'Look for Bullish OB below current price — last bearish candle before the strong bullish move that caused BMS. OB must be validated by BMS — no BMS = no valid OB (SMC rule).' : 'Look for Bearish OB above current price — last bullish candle before the strong bearish move that caused BMS. OB must be validated by BMS.'}
-💧 Fair Value Gap (FVG): ${posNum < 35 ? 'Bullish FVG likely below — price tends to return to fill the gap before continuing up (RTO setup)' : posNum > 65 ? 'Bearish FVG likely above — price tends to return to fill the gap before continuing down (RTO setup)' : 'Monitor for FVG formation on lower timeframes'}
-🎯 Liquidity: ${isDiscount ? `Sell Side Liquidity (SSL) targets: ${sslTargets}. Smart money sweeps these levels before reversing up.` : `Buy Side Liquidity (BSL) targets: ${bslTargets}. Smart money sweeps these levels before reversing down.`}
-📊 AMD Pattern: ${isDiscount ? 'Likely in Accumulation/Manipulation phase — watch for false breakdown then Distribution upward' : 'Likely in Distribution phase — watch for Manipulation above highs then reversal'}
+🏦 Order Block: ${isBuy ? 'Look for Bullish OB below current price — last bearish candle before the strong bullish move that caused BMS. In an uptrend, price returns to OB then continues up.' : 'Look for Bearish OB above current price — last bullish candle before the strong bearish move that caused BMS. In a downtrend, price returns to OB then continues down.'}
+💧 Fair Value Gap (FVG): ${isBuy ? 'Bullish FVG below — price tends to return to fill the gap then continue UP (trend continuation setup)' : 'Bearish FVG above — price tends to return to fill the gap then continue DOWN (trend continuation setup)'}
+🎯 Liquidity: ${isBuy ? `SSL targets: ${sslTargets}. In uptrend, smart money sweeps these before continuing up.` : `BSL targets: ${bslTargets}. In downtrend, smart money sweeps these before continuing down.`}
+📊 AMD Pattern: ${isBuy ? 'Accumulation → Manipulation (down) → Distribution (up) — look for buy setups after SSL sweep' : 'Accumulation → Manipulation (up) → Distribution (down) — look for sell setups after BSL sweep'}
 ⏱️ SMC Session: ${smcSession}
 📋 SMC Setup: ${smcSetup}`;
 
@@ -228,23 +388,24 @@ function generateLocalAnalysis(
   const resistance2 = marketData.high;
   const fib61_8 = support1 - range * 0.236;
 
-  // Technical indicators
-  const rsi = posNum < 30 ? Math.round(25 + posNum * 0.3) : posNum > 70 ? Math.round(60 + posNum * 0.3) : Math.round(35 + posNum * 0.4);
-  const macdSignal = posNum < 40 ? 'Bullish crossover forming — MACD line crossing above signal line' : posNum > 60 ? 'Bearish crossover forming — MACD line crossing below signal line' : 'MACD converging — no clear signal yet';
-  const maSignal = posNum < 35 ? 'Golden Cross potential — MA5 crossing above MA20' : posNum > 65 ? 'Death Cross potential — MA5 crossing below MA20' : 'Moving Averages flat — no clear trend';
+  // Real indicators from trend analysis
+  const rsi = Math.round(trendAnalysis.rsi);
+  const macdSignal = isBuy ? 'Bullish — MACD line above signal line (trend following)' : 'Bearish — MACD line below signal line (trend following)';
+  const maSignal = isBuy ? `Golden Cross — EMA20 (${trendAnalysis.ema20.toFixed(decimals)}) above EMA50 (${trendAnalysis.ema50.toFixed(decimals)})` : `Death Cross — EMA20 (${trendAnalysis.ema20.toFixed(decimals)}) below EMA50 (${trendAnalysis.ema50.toFixed(decimals)})`;
+
+  const confluenceCount = trendAnalysis.trendConfluence;
 
   return `📊 ${pair} Analysis — ${timeframe} Timeframe — ${modeLabel}
-${trendEmoji} Trend: ${detectedTrend} (${marketData.changePercent >= 0 ? '+' : ''}${marketData.changePercent.toFixed(2)}%)
-
+${trendEmoji} Trend: ${detectedTrend} (Strength: ${trendAnalysis.strength}% | ${trendAnalysis.structure})
 🔷 Live Price: ${currentPrice.toFixed(decimals)} | Day Range: ${marketData.low.toFixed(decimals)} — ${marketData.high.toFixed(decimals)}
-🔷 Range Position: ${position}% | Change: ${marketData.changePercent >= 0 ? '+' : ''}${marketData.change.toFixed(decimals)} (${marketData.changePercent >= 0 ? '+' : ''}${marketData.changePercent.toFixed(2)}%)
+🔷 Range Position: ${position}% | Change: ${marketData.changePercent >= 0 ? '+' : ''}${marketData.changePercent.toFixed(2)}%
 
 ━━━ 🕯️ Candlestick Analysis ━━━
 Pattern: ${candlePattern}
 ${candleDesc}
 
-━━━ 📈 Technical Indicators ━━━
-📊 RSI: ${rsi} — ${rsi > 70 ? 'Overbought zone — potential reversal down' : rsi < 30 ? 'Oversold zone — potential reversal up' : rsi < 45 ? 'Approaching oversold — watch for bounce' : rsi > 55 ? 'Approaching overbought — watch for rejection' : 'Neutral zone'}
+━━━ 📈 Technical Indicators (from OHLCV data) ━━━
+📊 RSI (14): ${rsi} — ${rsi > 70 ? 'Overbought but trend is up — trade with caution' : rsi < 30 ? 'Oversold but trend is down — trade with caution' : isBuy ? 'Favorable for buying — trend momentum supports upside' : 'Favorable for selling — trend momentum supports downside'}
 📈 MACD: ${macdSignal}
 📊 MA: ${maSignal}
 
@@ -257,20 +418,20 @@ Support 2: ${support2.toFixed(decimals)} (Daily Low = PDL/LOD — SMC SSL target
 Resistance 1: ${resistance1.toFixed(decimals)} (38.2% Fib)
 Resistance 2: ${resistance2.toFixed(decimals)} (Daily High = PDH/HOD — SMC BSL target)
 OTE Zone: ${fib61_8.toFixed(decimals)} - ${(fib61_8 - range * 0.172).toFixed(decimals)} (0.618-0.79 Fib — Optimal Trade Entry per SMC)
-Fibonacci Levels: 50% (${(currentPrice - range * 0.5 * (isDiscount ? 1 : -1)).toFixed(decimals)}) | 61.8% | 70.5% | 79%
 
 ━━━ 📋 SMC Confluence Checklist ━━━
-${isDiscount ? '✅' : '❌'} Price in Discount Zone (buy zone)
-${detectedTrend.includes('Bullish') || detectedTrend.includes('Potentially Bullish') ? '✅' : '❌'} HTF BMS ${isDiscount ? 'Bullish' : 'Bearish'}
+${isBuy ? '✅' : '❌'} Trend Direction: ${detectedTrend}
+${trendAnalysis.structure === 'HH/HL' ? '✅' : '❌'} Market Structure: ${trendAnalysis.structure}
+${trendAnalysis.ema20 > trendAnalysis.ema50 ? '✅' : '❌'} EMA Alignment (EMA20 > EMA50)
+${trendAnalysis.rsi > 50 && trendAnalysis.rsi < 75 ? '✅' : trendAnalysis.rsi < 50 && trendAnalysis.rsi > 25 ? '✅' : '❌'} RSI supports trend
 ✅ ${smcSession}
-${posNum < 30 || posNum > 70 ? '✅' : '❌'} Liquidity Sweep (${isDiscount ? 'SSL at ' + sslTargets : 'BSL at ' + bslTargets})
 ❓ OB validated by BMS (confirm on chart)
 ❓ FVG formed after MSS
 ❓ Entry at OTE zone (0.618-0.79 Fib)
-Minimum 2 confluences required per SMC methodology.
+Confluence Score: ${confluenceCount}/5. Minimum 2 required per SMC methodology.
 
 ━━━ 💡 ${modeLabel} Recommendation ━━━
-${detectedTrend.includes('Bullish') ? `🟢 Look for BUY setups at support levels. Best entry in OTE zone (0.618-0.79 Fib). After BMS, wait for Retracement to 50%/OTE — never enter immediately (SMC rule). Wait for SH (Stop Hunt) + BMS + RTO to OB. ${smcSession}.` : detectedTrend.includes('Bearish') ? `🔴 Look for SELL setups at resistance levels. Best entry in OTE zone (0.618-0.79 Fib). After BMS, wait for Retracement to 50%/OTE. Wait for SH + BMS + RTO to OB. ${smcSession}.` : `⏳ Wait for clear directional confirmation. The market HARDLY reverses without taking liquidity first (SMC rule). Watch for liquidity sweep + BMS + RTO before entering. ${smcSession}.`}
+${isBuy ? `🟢 TREND IS BULLISH — Look for BUY setups. Best entry in OTE zone (0.618-0.79 Fib retracement of the last swing). After BMS, wait for Retracement to 50%/OTE — never enter immediately (SMC rule). Wait for SH (Stop Hunt / SSL sweep) + BMS + RTO to Bullish OB. ${smcSession}.` : `🔴 TREND IS BEARISH — Look for SELL setups. Best entry in OTE zone (0.618-0.79 Fib retracement of the last swing). After BMS, wait for Retracement to 50%/OTE. Wait for SH (Stop Hunt / BSL sweep) + BMS + RTO to Bearish OB. ${smcSession}.`}
 
 ⚠️ ${modeLabel} risk max ${riskMax} per trade. R:R minimum 1:2. After BMS ALWAYS wait for Retracement. This is educational analysis only.`;
 }

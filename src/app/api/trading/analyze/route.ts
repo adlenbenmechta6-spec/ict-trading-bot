@@ -1,147 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
-import { fetchRealPrice, fetchOHLCVData, OHLCVCandle } from '@/lib/market-data';
+import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
 import { ICT_ANALYSIS_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
+import { SMC_SETUPS } from '@/lib/smc-knowledge';
+import {
+  analyzeTrend,
+  determineSignalDirection,
+  aiContradictsTrend,
+  getICTInstrumentTier,
+  buildTrendContext,
+  getDecimals,
+  formatPrice,
+  TrendAnalysis,
+} from '@/lib/trend-analysis';
 
 export const maxDuration = 30;
 
-// ─── TREND ANALYSIS ENGINE (shared with signal route) ─────────────────
-interface TrendAnalysis {
-  direction: 'bullish' | 'bearish' | 'ranging';
-  strength: number;
-  ema20: number;
-  ema50: number;
-  rsi: number;
-  structure: 'HH/HL' | 'LH/LL' | 'Ranging';
-  lastSwingHigh: number;
-  lastSwingLow: number;
-  trendConfluence: number;
-  reasoning: string;
-}
-
-function analyzeTrend(candles: OHLCVCandle[], currentPrice: number): TrendAnalysis {
-  if (candles.length < 20) {
-    return {
-      direction: 'ranging', strength: 30, ema20: currentPrice, ema50: currentPrice,
-      rsi: 50, structure: 'Ranging', lastSwingHigh: currentPrice, lastSwingLow: currentPrice,
-      trendConfluence: 0, reasoning: 'Insufficient candle data',
-    };
-  }
-
-  const closes = candles.map(c => c.close);
-  const ema20 = calculateEMA(closes, 20);
-  const ema50 = calculateEMA(closes, 50);
-  const rsi = calculateRSI(closes, 14);
-  const { structure, lastSwingHigh, lastSwingLow } = analyzeMarketStructure(candles);
-
-  const aboveEma20 = currentPrice > ema20;
-  const aboveEma50 = currentPrice > ema50;
-
-  const recentCandles = candles.slice(-5);
-  const prevCandles = candles.slice(-10, -5);
-  const recentMomentum = recentCandles.reduce((sum, c) => sum + (c.close - c.open), 0);
-  const prevMomentum = prevCandles.reduce((sum, c) => sum + (c.close - c.open), 0);
-  const momentumBullish = recentMomentum > 0 && recentMomentum > prevMomentum * 0.5;
-
-  let bullishVotes = 0, bearishVotes = 0;
-
-  if (ema20 > ema50 && aboveEma20) bullishVotes++;
-  if (ema20 < ema50 && !aboveEma20) bearishVotes++;
-  if (aboveEma20 && aboveEma50) bullishVotes++;
-  if (!aboveEma20 && !aboveEma50) bearishVotes++;
-  if (structure === 'HH/HL') bullishVotes++;
-  if (structure === 'LH/LL') bearishVotes++;
-  if (momentumBullish) bullishVotes++;
-  if (!momentumBullish && recentMomentum < 0) bearishVotes++;
-  if (rsi > 50 && rsi < 75) bullishVotes++;
-  if (rsi < 50 && rsi > 25) bearishVotes++;
-
-  let direction: 'bullish' | 'bearish' | 'ranging';
-  let strength: number;
-  let trendConfluence: number;
-
-  if (bullishVotes >= 3 && bullishVotes > bearishVotes) {
-    direction = 'bullish';
-    strength = Math.min(95, 50 + (bullishVotes - bearishVotes) * 12);
-    trendConfluence = bullishVotes;
-  } else if (bearishVotes >= 3 && bearishVotes > bullishVotes) {
-    direction = 'bearish';
-    strength = Math.min(95, 50 + (bearishVotes - bullishVotes) * 12);
-    trendConfluence = bearishVotes;
-  } else {
-    direction = 'ranging';
-    strength = 30;
-    trendConfluence = Math.max(bullishVotes, bearishVotes);
-  }
-
-  const reasoning = `EMA20 ${ema20.toFixed(2)} | EMA50 ${ema50.toFixed(2)} | Structure: ${structure} | RSI: ${rsi.toFixed(0)} | Momentum: ${momentumBullish ? 'Bullish' : 'Bearish'} | Bull=${bullishVotes} Bear=${bearishVotes}`;
-
-  return { direction, strength, ema20, ema50, rsi, structure, lastSwingHigh, lastSwingLow, trendConfluence, reasoning };
-}
-
-function calculateEMA(data: number[], period: number): number {
-  if (data.length < period) return data[data.length - 1] || 0;
-  const multiplier = 2 / (period + 1);
-  let ema = data.slice(0, period).reduce((sum, val) => sum + val, 0) / period;
-  for (let i = period; i < data.length; i++) {
-    ema = (data[i] - ema) * multiplier + ema;
-  }
-  return ema;
-}
-
-function calculateRSI(data: number[], period: number = 14): number {
-  if (data.length < period + 1) return 50;
-  let gains = 0, losses = 0;
-  for (let i = 1; i <= period; i++) {
-    const change = data[i] - data[i - 1];
-    if (change > 0) gains += change; else losses -= change;
-  }
-  let avgGain = gains / period, avgLoss = losses / period;
-  for (let i = period + 1; i < data.length; i++) {
-    const change = data[i] - data[i - 1];
-    avgGain = (avgGain * (period - 1) + (change > 0 ? change : 0)) / period;
-    avgLoss = (avgLoss * (period - 1) + (change < 0 ? -change : 0)) / period;
-  }
-  if (avgLoss === 0) return 100;
-  return 100 - (100 / (1 + avgGain / avgLoss));
-}
-
-function analyzeMarketStructure(candles: OHLCVCandle[]): {
-  structure: 'HH/HL' | 'LH/LL' | 'Ranging';
-  lastSwingHigh: number; lastSwingLow: number;
-} {
-  const recent = candles.slice(-30);
-  const swingHighs: number[] = [], swingLows: number[] = [];
-
-  for (let i = 2; i < recent.length - 2; i++) {
-    if (recent[i].high > recent[i-1].high && recent[i].high > recent[i-2].high &&
-        recent[i].high > recent[i+1].high && recent[i].high > recent[i+2].high) {
-      swingHighs.push(recent[i].high);
-    }
-    if (recent[i].low < recent[i-1].low && recent[i].low < recent[i-2].low &&
-        recent[i].low < recent[i+1].low && recent[i].low < recent[i+2].low) {
-      swingLows.push(recent[i].low);
-    }
-  }
-
-  const lastSwingHigh = swingHighs.length > 0 ? swingHighs[swingHighs.length - 1] : Math.max(...recent.slice(-10).map(c => c.high));
-  const lastSwingLow = swingLows.length > 0 ? swingLows[swingLows.length - 1] : Math.min(...recent.slice(-10).map(c => c.low));
-
-  let structure: 'HH/HL' | 'LH/LL' | 'Ranging' = 'Ranging';
-  if (swingHighs.length >= 2 && swingLows.length >= 2) {
-    const recentHighs = swingHighs.slice(-3), recentLows = swingLows.slice(-3);
-    const higherHighs = recentHighs.length >= 2 && recentHighs[recentHighs.length - 1] > recentHighs[recentHighs.length - 2];
-    const higherLows = recentLows.length >= 2 && recentLows[recentLows.length - 1] > recentLows[recentLows.length - 2];
-    const lowerHighs = recentHighs.length >= 2 && recentHighs[recentHighs.length - 1] < recentHighs[recentHighs.length - 2];
-    const lowerLows = recentLows.length >= 2 && recentLows[recentLows.length - 1] < recentLows[recentLows.length - 2];
-    if (higherHighs && higherLows) structure = 'HH/HL';
-    else if (lowerHighs && lowerLows) structure = 'LH/LL';
-  }
-
-  return { structure, lastSwingHigh, lastSwingLow };
-}
-
 // ─── MAIN ANALYSIS ENDPOINT ───────────────────────────────────────────
+// KEY FIX: Now uses the SAME trend analysis engine and Trend Override
+// as the signal route — both endpoints will give CONSISTENT predictions
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -165,28 +42,18 @@ export async function POST(req: NextRequest) {
     const dayLow = marketData.low || ohlcvData.dayLow;
     const changePercent = marketData.changePercent || ohlcvData.changePercent;
 
-    // ─── CRITICAL FIX: Analyze REAL trend from OHLCV candles ────────
+    // ─── CRITICAL: Use shared trend analysis engine ────────────────
     const trendAnalysis = analyzeTrend(ohlcvData.candles, currentPrice);
 
     // Mode-specific analysis label
     const modeLabel = mode === 'scalping' ? 'Scalping' : mode === 'daytrading' ? 'Day Trading' : 'Swing Trading';
 
-    // ─── CRITICAL FIX: Pass trend analysis to AI ────────────────────
-    const trendContext = `
-=== TREND ANALYSIS (FROM REAL OHLCV DATA) ===
-Current Trend: ${trendAnalysis.direction.toUpperCase()} (Strength: ${trendAnalysis.strength}/100)
-Market Structure: ${trendAnalysis.structure}
-EMA 20: ${trendAnalysis.ema20.toFixed(pair === 'XAU/USD' ? 2 : pair.includes('JPY') ? 3 : 5)}
-EMA 50: ${trendAnalysis.ema50.toFixed(pair === 'XAU/USD' ? 2 : pair.includes('JPY') ? 3 : 5)}
-RSI (14): ${trendAnalysis.rsi.toFixed(1)}
-Last Swing High: ${trendAnalysis.lastSwingHigh.toFixed(pair === 'XAU/USD' ? 2 : pair.includes('JPY') ? 3 : 5)}
-Last Swing Low: ${trendAnalysis.lastSwingLow.toFixed(pair === 'XAU/USD' ? 2 : pair.includes('JPY') ? 3 : 5)}
-Trend Confluence Score: ${trendAnalysis.trendConfluence}/5
-Analysis: ${trendAnalysis.reasoning}
+    // ─── CRITICAL: Use shared trend context for AI ─────────────────
+    const trendContext = buildTrendContext(trendAnalysis, pair);
 
-*** CRITICAL: Base your analysis on this trend data. If trend is BULLISH, recommend BUY setups. If BEARISH, recommend SELL setups. ***
-*** Do NOT use mean reversion logic. Follow the trend direction. ***
-`;
+    // ─── CRITICAL: Determine direction using SHARED logic ──────────
+    // This ensures analyze and signal ALWAYS agree on direction
+    const isBuy = determineSignalDirection(trendAnalysis, changePercent);
 
     const aiAnalysis = await chatCompletion({
       systemPrompt: `${ICT_ANALYSIS_SYSTEM_PROMPT}
@@ -214,22 +81,41 @@ Analyze as if you are looking at the TradingView chart. Provide:
 4. TradingView indicators (RSI, MACD, Moving Averages, Bollinger Bands)
 5. Support & Resistance with OTE zone (61.8%-79% retracement)
 6. ICT Confluence Score (1-10): HTF bias + Premium/Discount + OB + FVG + Liquidity Sweep + MSS + Kill Zone
-7. Trading recommendation appropriate for ${modeLabel} — MUST follow the trend direction above
+7. Trading recommendation — MUST be ${isBuy ? 'BUY' : 'SELL'} based on the trend analysis above
 
 ${mode === 'scalping' ? 'Focus on micro-level patterns (Month 8-9): OSOK model, Silver Bullet windows, M5/M1 OB and FVG. Quick in-and-out trades during Kill Zones.' : mode === 'daytrading' ? 'Focus on intraday momentum (Month 8): CBDR, intraday profiles, Bread & Butter setups. All positions should be closed before end of day.' : 'Focus on major structure and multi-day moves (Month 6): HTF OB/FVG, swing conditions, million dollar setup criteria. Wider stops and targets.'}
 
 All prices must be realistic and near the TradingView price of ${currentPrice}.
 Be concise and professional. Use specific ICT Core Content month references. Respond in English.`,
-      userMessage: `${modeLabel} analysis for ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${dayHigh}, Today's low: ${dayLow}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%). Follow the trend direction. Be concise - 400 words max.`,
+      userMessage: `${modeLabel} analysis for ${pair} on TradingView ${timeframe} chart. Live price from TradingView: ${currentPrice}, Today's high: ${dayHigh}, Today's low: ${dayLow}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%). Direction: ${isBuy ? 'BULLISH — recommend BUY setups' : 'BEARISH — recommend SELL setups'}. Follow the trend direction. Be concise - 400 words max.`,
       temperature: 0.4,
       maxTokens: 600,
     });
 
-    // ─── CRITICAL FIX: Use real trend analysis for chart data direction ─
-    const trend = trendAnalysis.direction === 'bullish' ? 'Bullish' : trendAnalysis.direction === 'bearish' ? 'Bearish' : 'Sideways';
+    // ─── CRITICAL FIX: Validate AI analysis matches trend direction ────
+    // If the AI analysis contradicts the trend, override it with trend-aligned analysis
+    let finalAnalysis = aiAnalysis;
 
-    // Use trend analysis to determine direction (NOT position-based mean reversion)
-    const isBuy = trendAnalysis.direction === 'bullish' || (trendAnalysis.direction === 'ranging' && changePercent > 0.1);
+    if (trendAnalysis.direction !== 'ranging' && trendAnalysis.strength >= 50) {
+      // Check if AI text contains contradictory direction keywords
+      const analysisLower = (aiAnalysis || '').toLowerCase();
+      const trendIsBullish = trendAnalysis.direction === 'bullish';
+
+      // Detect if AI is recommending the wrong direction
+      const aiRecommendsBuy = analysisLower.includes('buy') || analysisLower.includes('bullish') || analysisLower.includes('long') || analysisLower.includes('uptrend');
+      const aiRecommendsSell = analysisLower.includes('sell') || analysisLower.includes('bearish') || analysisLower.includes('short') || analysisLower.includes('downtrend');
+
+      const contradictsTrend = (trendIsBullish && aiRecommendsSell && !aiRecommendsBuy) ||
+                               (!trendIsBullish && aiRecommendsBuy && !aiRecommendsSell);
+
+      if (contradictsTrend) {
+        console.warn(`[ANALYZE TREND OVERRIDE] AI analysis contradicted ${trendAnalysis.direction} trend (${trendAnalysis.strength}%). Overriding with trend-aligned analysis.`);
+        finalAnalysis = null; // Will use generateLocalAnalysis which follows trend
+      }
+    }
+
+    // ─── Use trend analysis for chart data direction ────────────────
+    const trend = trendAnalysis.direction === 'bullish' ? 'Bullish' : trendAnalysis.direction === 'bearish' ? 'Bearish' : 'Sideways';
 
     // Adjust ATR multiplier based on mode
     const range = dayHigh - dayLow;
@@ -260,7 +146,7 @@ Be concise and professional. Use specific ICT Core Content month references. Res
       high: dayHigh,
       low: dayLow,
       changePercent,
-      aiAnalysis: aiAnalysis || generateLocalAnalysis(pair, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, trend, timeframe, mode, trendAnalysis),
+      aiAnalysis: finalAnalysis || generateLocalAnalysis(pair, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, trend, timeframe, mode, trendAnalysis),
       chartData: {
         pair,
         timeframe,
@@ -309,31 +195,27 @@ Be concise and professional. Use specific ICT Core Content month references. Res
   }
 }
 
-// ─── FIXED LOCAL ANALYSIS (now uses trend data) ──────────────────────
+// ─── FIXED LOCAL ANALYSIS (now uses shared trend logic) ─────────────
 function generateLocalAnalysis(
   pair: string, currentPrice: number,
   marketData: { high: number; low: number; change: number; changePercent: number }, trend: string,
   timeframe: string, mode: string, trendAnalysis: TrendAnalysis
 ): string {
+  const decimals = getDecimals(pair);
   const range = marketData.high - marketData.low;
   const position = range > 0 ? ((currentPrice - marketData.low) / range * 100).toFixed(0) : '50';
   const posNum = parseFloat(position);
-  const decimals = pair.includes('JPY') || pair === 'XAU/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
 
   // ═══════════════════════════════════════════════════════════════════
-  // 🔴 THE BUG WAS HERE — OLD LOGIC used mean reversion:
-  //   if (posNum < 35) → Bullish ← WRONG! Price low ≠ bullish
-  //   if (posNum > 65) → Bearish ← WRONG! Price high ≠ bearish
-  //
-  // ✅ NEW LOGIC: Use real trend analysis from OHLCV candles
+  // ✅ TREND FOLLOWING LOGIC (from shared determineSignalDirection)
   // ═══════════════════════════════════════════════════════════════════
+  const isBuy = determineSignalDirection(trendAnalysis, marketData.changePercent);
+
   let detectedTrend = trend;
   let trendEmoji = '↔️';
   if (trendAnalysis.direction === 'bullish') { detectedTrend = 'Bullish'; trendEmoji = '🟢'; }
   else if (trendAnalysis.direction === 'bearish') { detectedTrend = 'Bearish'; trendEmoji = '🔴'; }
   else { detectedTrend = 'Sideways'; trendEmoji = '🟡'; }
-
-  const isBuy = trendAnalysis.direction === 'bullish' || (trendAnalysis.direction === 'ranging' && marketData.changePercent > 0.1);
 
   // Mode label
   const modeLabel = mode === 'scalping' ? '⚡ SCALPING' : mode === 'daytrading' ? '📊 DAY TRADING' : '📅 SWING TRADING';
@@ -371,7 +253,7 @@ function generateLocalAnalysis(
   }
 
   const ictAnalysis = `${isBuy ? '✅ BULLISH Trend' : '⚠️ BEARISH Trend'} — Trend strength: ${trendAnalysis.strength}%, Confluence: ${trendAnalysis.trendConfluence}/5
-📊 EMA20: ${trendAnalysis.ema20.toFixed(decimals)} | EMA50: ${trendAnalysis.ema50.toFixed(decimals)} | ${isBuy ? 'EMA20 > EMA50 (Bullish)' : 'EMA20 < EMA50 (Bearish)'}
+📊 EMA20: ${formatPrice(pair, trendAnalysis.ema20)} | EMA50: ${formatPrice(pair, trendAnalysis.ema50)} | ${isBuy ? 'EMA20 > EMA50 (Bullish)' : 'EMA20 < EMA50 (Bearish)'}
 🏗️ Structure: ${trendAnalysis.structure} — ${isBuy ? 'Higher Highs / Higher Lows' : 'Lower Highs / Lower Lows'}
 
 🏦 Order Block: ${isBuy ? 'Look for Bullish OB below current price — last bearish candle before the strong bullish move that caused BMS. In an uptrend, price returns to OB then continues up.' : 'Look for Bearish OB above current price — last bullish candle before the strong bearish move that caused BMS. In a downtrend, price returns to OB then continues down.'}
@@ -391,13 +273,13 @@ function generateLocalAnalysis(
   // Real indicators from trend analysis
   const rsi = Math.round(trendAnalysis.rsi);
   const macdSignal = isBuy ? 'Bullish — MACD line above signal line (trend following)' : 'Bearish — MACD line below signal line (trend following)';
-  const maSignal = isBuy ? `Golden Cross — EMA20 (${trendAnalysis.ema20.toFixed(decimals)}) above EMA50 (${trendAnalysis.ema50.toFixed(decimals)})` : `Death Cross — EMA20 (${trendAnalysis.ema20.toFixed(decimals)}) below EMA50 (${trendAnalysis.ema50.toFixed(decimals)})`;
+  const maSignal = isBuy ? `Golden Cross — EMA20 (${formatPrice(pair, trendAnalysis.ema20)}) above EMA50 (${formatPrice(pair, trendAnalysis.ema50)})` : `Death Cross — EMA20 (${formatPrice(pair, trendAnalysis.ema20)}) below EMA50 (${formatPrice(pair, trendAnalysis.ema50)})`;
 
   const confluenceCount = trendAnalysis.trendConfluence;
 
   return `📊 ${pair} Analysis — ${timeframe} Timeframe — ${modeLabel}
 ${trendEmoji} Trend: ${detectedTrend} (Strength: ${trendAnalysis.strength}% | ${trendAnalysis.structure})
-🔷 Live Price: ${currentPrice.toFixed(decimals)} | Day Range: ${marketData.low.toFixed(decimals)} — ${marketData.high.toFixed(decimals)}
+🔷 Live Price: ${formatPrice(pair, currentPrice)} | Day Range: ${formatPrice(pair, marketData.low)} — ${formatPrice(pair, marketData.high)}
 🔷 Range Position: ${position}% | Change: ${marketData.changePercent >= 0 ? '+' : ''}${marketData.changePercent.toFixed(2)}%
 
 ━━━ 🕯️ Candlestick Analysis ━━━
@@ -413,11 +295,11 @@ ${candleDesc}
 ${ictAnalysis}
 
 ━━━ 🎯 Key Levels ━━━
-Support 1: ${support1.toFixed(decimals)} (38.2% Fib)
-Support 2: ${support2.toFixed(decimals)} (Daily Low = PDL/LOD — SMC SSL target)
-Resistance 1: ${resistance1.toFixed(decimals)} (38.2% Fib)
-Resistance 2: ${resistance2.toFixed(decimals)} (Daily High = PDH/HOD — SMC BSL target)
-OTE Zone: ${fib61_8.toFixed(decimals)} - ${(fib61_8 - range * 0.172).toFixed(decimals)} (0.618-0.79 Fib — Optimal Trade Entry per SMC)
+Support 1: ${formatPrice(pair, support1)} (38.2% Fib)
+Support 2: ${formatPrice(pair, support2)} (Daily Low = PDL/LOD — SMC SSL target)
+Resistance 1: ${formatPrice(pair, resistance1)} (38.2% Fib)
+Resistance 2: ${formatPrice(pair, resistance2)} (Daily High = PDH/HOD — SMC BSL target)
+OTE Zone: ${formatPrice(pair, fib61_8)} - ${formatPrice(pair, fib61_8 - range * 0.172)} (0.618-0.79 Fib — Optimal Trade Entry per SMC)
 
 ━━━ 📋 SMC Confluence Checklist ━━━
 ${isBuy ? '✅' : '❌'} Trend Direction: ${detectedTrend}
@@ -434,18 +316,4 @@ Confluence Score: ${confluenceCount}/5. Minimum 2 required per SMC methodology.
 ${isBuy ? `🟢 TREND IS BULLISH — Look for BUY setups. Best entry in OTE zone (0.618-0.79 Fib retracement of the last swing). After BMS, wait for Retracement to 50%/OTE — never enter immediately (SMC rule). Wait for SH (Stop Hunt / SSL sweep) + BMS + RTO to Bullish OB. ${smcSession}.` : `🔴 TREND IS BEARISH — Look for SELL setups. Best entry in OTE zone (0.618-0.79 Fib retracement of the last swing). After BMS, wait for Retracement to 50%/OTE. Wait for SH (Stop Hunt / BSL sweep) + BMS + RTO to Bearish OB. ${smcSession}.`}
 
 ⚠️ ${modeLabel} risk max ${riskMax} per trade. R:R minimum 1:2. After BMS ALWAYS wait for Retracement. This is educational analysis only.`;
-}
-
-// ─── ICT Instrument Tier Classification ───────────────────────────────
-function getICTInstrumentTier(pair: string): string {
-  const tier1 = ['EUR/USD', 'GBP/USD', 'XAU/USD', 'NAS100'];
-  const tier2 = ['USD/JPY', 'GBP/JPY', 'US30', 'US500'];
-  const tier3 = ['AUD/USD', 'USD/CAD', 'NZD/USD', 'EUR/GBP', 'USD/CHF'];
-  const tier4 = ['BTC/USD', 'ETH/USD'];
-
-  if (tier1.includes(pair)) return 'Tier 1';
-  if (tier2.includes(pair)) return 'Tier 2';
-  if (tier3.includes(pair)) return 'Tier 3';
-  if (tier4.includes(pair)) return 'Tier 4 (Crypto - patterns less reliable)';
-  return 'Tier 3';
 }

@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       .map(p => {
         const trend = trendMap[p.pair] || 'ranging';
         const trendLabel = trend === 'bullish' ? '🟢 BULLISH' : trend === 'bearish' ? '🔴 BEARISH' : '🟡 RANGING';
-        return `${p.pair}: ${p.price} (${p.changePercent >= 0 ? '+' : ''}${p.changePercent.toFixed(2}%) | Trend: ${trendLabel}`;
+        return `${p.pair}: ${p.price} (${p.changePercent >= 0 ? '+' : ''}${p.changePercent.toFixed(2)}%) | Trend: ${trendLabel}`;
       })
       .join(' | ');
 

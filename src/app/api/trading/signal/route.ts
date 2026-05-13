@@ -12,6 +12,7 @@ import {
   buildTrendContext,
   getDecimals,
   formatPrice,
+  validateSignalPrices,
   TrendAnalysis,
 } from '@/lib/trend-analysis';
 
@@ -95,11 +96,17 @@ Return ONLY valid JSON (no markdown, no backticks):
   "analysis": "2-3 sentence reasoning based on ICT Core Content ${modeLabel} analysis with specific references to months 1-12 concepts"
 }
 
+IMPORTANT SL/TP RULES — VIOLATION = INVALID SIGNAL:
+- If type is "BUY": entry < tp1 < tp2 AND sl < entry (SL MUST be below entry!)
+- If type is "SELL": tp2 < tp1 < entry AND sl > entry (SL MUST be above entry!)
+- SL MUST be on the OPPOSITE side of entry from TP
+- R:R minimum 1:2 (TP distance must be at least 2x SL distance)
+- All prices must be realistic and near the TradingView price of ${currentPrice}
+
 Important ${modeLabel} rules:
 ${modeConfig.promptRules}
 
-All prices must be realistic and near the TradingView price of ${currentPrice}.
-R:R at least 1:2, realistic confidence based on ICT confluence count.`,
+Realistic confidence based on ICT confluence count.`,
       userMessage: `${modeLabel} signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${dayHigh}, L: ${dayLow}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%). You MUST follow the trend direction.`,
       temperature: 0.4,
       maxTokens: 400,
@@ -114,7 +121,7 @@ R:R at least 1:2, realistic confidence based on ICT confluence count.`,
         }
         signal = JSON.parse(cleaned);
 
-        // ─── CRITICAL FIX: Validate AI signal matches trend ───────────
+        // ─── CRITICAL FIX 1: Validate AI signal matches trend ────────
         // If AI goes against the strong trend, override to follow trend
         if (trendAnalysis.direction !== 'ranging' && trendAnalysis.strength >= 60) {
           if (aiContradictsTrend(signal.type, trendAnalysis)) {
@@ -123,6 +130,20 @@ R:R at least 1:2, realistic confidence based on ICT confluence count.`,
             signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis);
           }
         }
+
+        // ─── CRITICAL FIX 2: Validate SL/TP are logically correct ────
+        // BUY: SL must be BELOW entry, TP above entry
+        // SELL: SL must be ABOVE entry, TP below entry
+        // This prevents the bug where SL > entry on a BUY signal
+        const validated = validateSignalPrices(
+          { type: signal.type, entry: signal.entry, tp1: signal.tp1, tp2: signal.tp2, sl: signal.sl },
+          currentPrice,
+          pair
+        );
+        signal.entry = validated.entry;
+        signal.tp1 = validated.tp1;
+        signal.tp2 = validated.tp2;
+        signal.sl = validated.sl;
       } catch {
         signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis);
       }

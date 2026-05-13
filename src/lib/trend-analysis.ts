@@ -292,6 +292,102 @@ export function getDecimals(pair: string): number {
   return pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
 }
 
+// ─── VALIDATE SIGNAL PRICES (SL/TP) ────────────────────────────────
+// CRITICAL: Ensures SL/TP are logically correct relative to entry
+//
+// For BUY signals:  SL < entry < TP1 < TP2
+// For SELL signals: TP2 < TP1 < entry < SL
+//
+// Returns corrected prices if AI gives invalid values
+export interface SignalPrices {
+  type: 'BUY' | 'SELL';
+  entry: number;
+  tp1: number;
+  tp2: number;
+  sl: number;
+}
+
+export function validateSignalPrices(
+  signal: SignalPrices,
+  currentPrice: number,
+  pair: string
+): SignalPrices {
+  const decimals = getDecimals(pair);
+  const isBuy = signal.type === 'BUY';
+
+  // Minimum distance from entry as percentage (prevents SL/TP too close to entry)
+  const minDistancePct = pair === 'XAU/USD' ? 0.001 : pair.includes('JPY') ? 0.001 : pair.startsWith('US') || pair.startsWith('NAS') ? 0.001 : 0.0003;
+  const minDistance = currentPrice * minDistancePct;
+
+  let { entry, tp1, tp2, sl } = signal;
+
+  // Ensure entry is near current price (within 0.5%)
+  if (Math.abs(entry - currentPrice) / currentPrice > 0.005) {
+    console.warn(`[PRICE VALIDATION] Entry ${entry} too far from current price ${currentPrice}. Fixing.`);
+    entry = currentPrice;
+  }
+
+  if (isBuy) {
+    // BUY: SL must be BELOW entry, TP1/TP2 must be ABOVE entry
+    // Fix SL if it's above or equal to entry
+    if (sl >= entry) {
+      console.warn(`[PRICE VALIDATION] BUY signal has SL (${sl}) >= entry (${entry}). Fixing SL below entry.`);
+      sl = entry - minDistance * 2;
+    }
+    // Fix TP1 if it's below or equal to entry
+    if (tp1 <= entry) {
+      console.warn(`[PRICE VALIDATION] BUY signal has TP1 (${tp1}) <= entry (${entry}). Fixing TP1 above entry.`);
+      tp1 = entry + minDistance * 4;
+    }
+    // Fix TP2 if it's below or equal to TP1
+    if (tp2 <= tp1) {
+      console.warn(`[PRICE VALIDATION] BUY signal has TP2 (${tp2}) <= TP1 (${tp1}). Fixing TP2 above TP1.`);
+      tp2 = entry + minDistance * 7;
+    }
+    // Ensure proper ordering: SL < entry < TP1 < TP2
+    if (!(sl < entry && entry < tp1 && tp1 < tp2)) {
+      console.warn(`[PRICE VALIDATION] BUY price ordering invalid. Recalculating all.`);
+      const distance = minDistance * 2;
+      sl = entry - distance;
+      tp1 = entry + distance * 2;
+      tp2 = entry + distance * 3.5;
+    }
+  } else {
+    // SELL: TP2 < TP1 < entry < SL
+    // Fix SL if it's below or equal to entry
+    if (sl <= entry) {
+      console.warn(`[PRICE VALIDATION] SELL signal has SL (${sl}) <= entry (${entry}). Fixing SL above entry.`);
+      sl = entry + minDistance * 2;
+    }
+    // Fix TP1 if it's above or equal to entry
+    if (tp1 >= entry) {
+      console.warn(`[PRICE VALIDATION] SELL signal has TP1 (${tp1}) >= entry (${entry}). Fixing TP1 below entry.`);
+      tp1 = entry - minDistance * 4;
+    }
+    // Fix TP2 if it's above or equal to TP1
+    if (tp2 >= tp1) {
+      console.warn(`[PRICE VALIDATION] SELL signal has TP2 (${tp2}) >= TP1 (${tp1}). Fixing TP2 below TP1.`);
+      tp2 = entry - minDistance * 7;
+    }
+    // Ensure proper ordering: TP2 < TP1 < entry < SL
+    if (!(tp2 < tp1 && tp1 < entry && entry < sl)) {
+      console.warn(`[PRICE VALIDATION] SELL price ordering invalid. Recalculating all.`);
+      const distance = minDistance * 2;
+      sl = entry + distance;
+      tp1 = entry - distance * 2;
+      tp2 = entry - distance * 3.5;
+    }
+  }
+
+  return {
+    type: signal.type,
+    entry: parseFloat(entry.toFixed(decimals)),
+    tp1: parseFloat(tp1.toFixed(decimals)),
+    tp2: parseFloat(tp2.toFixed(decimals)),
+    sl: parseFloat(sl.toFixed(decimals)),
+  };
+}
+
 // ─── Build trend context string for AI prompts ──────────────────────
 export function buildTrendContext(trendAnalysis: TrendAnalysis, pair: string): string {
   return `

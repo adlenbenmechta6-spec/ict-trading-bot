@@ -11,6 +11,7 @@ import {
   buildTrendContext,
   getDecimals,
   formatPrice,
+  validateSignalPrices,
   TrendAnalysis,
 } from '@/lib/trend-analysis';
 
@@ -137,6 +138,13 @@ Be concise and professional. Use specific ICT Core Content month references. Res
       ictElements: [isBuy ? 'Bullish OB' : 'Bearish OB', `Trend: ${trend} (${trendAnalysis.strength}%)`],
     };
 
+    // ─── CRITICAL: Validate SL/TP are logically correct ────────────
+    const validatedChart = validateSignalPrices(
+      { type: chartData.type, entry: chartData.entry, tp1: chartData.tp1, tp2: chartData.tp2, sl: chartData.sl },
+      currentPrice,
+      pair
+    );
+
     return NextResponse.json({
       success: true,
       pair,
@@ -153,11 +161,11 @@ Be concise and professional. Use specific ICT Core Content month references. Res
         currentPrice,
         high: dayHigh,
         low: dayLow,
-        type: chartData.type,
-        entry: chartData.entry,
-        tp1: chartData.tp1,
-        tp2: chartData.tp2,
-        sl: chartData.sl,
+        type: validatedChart.type,
+        entry: validatedChart.entry,
+        tp1: validatedChart.tp1,
+        tp2: validatedChart.tp2,
+        sl: validatedChart.sl,
         confidence: chartData.confidence,
         riskReward: chartData.riskReward,
         pattern: chartData.pattern,

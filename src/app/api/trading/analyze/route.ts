@@ -12,6 +12,7 @@ import {
   getDecimals,
   formatPrice,
   validateSignalPrices,
+  calculateSLTPDistances,
   TrendAnalysis,
 } from '@/lib/trend-analysis';
 
@@ -118,19 +119,21 @@ Be concise and professional. Use specific ICT Core Content month references. Res
     // ─── Use trend analysis for chart data direction ────────────────
     const trend = trendAnalysis.direction === 'bullish' ? 'Bullish' : trendAnalysis.direction === 'bearish' ? 'Bearish' : 'Sideways';
 
-    // Adjust ATR multiplier based on mode
-    const range = dayHigh - dayLow;
-    const atrMult = mode === 'scalping' ? 0.5 : mode === 'daytrading' ? 0.8 : 1.0;
-    const atr = (range > 0 ? range * 0.3 : currentPrice * 0.005) * atrMult;
+    // ─── PROFESSIONAL: Use real ATR from OHLCV for SL/TP ─────────
+    const atrDistances = calculateSLTPDistances(ohlcvData.candles, mode);
+    const professionalATR = atrDistances.atr > 0;
+    const slDist = professionalATR ? atrDistances.sl : currentPrice * 0.005;
+    const tp1Dist = professionalATR ? atrDistances.tp1 : currentPrice * 0.01;
+    const tp2Dist = professionalATR ? atrDistances.tp2 : currentPrice * 0.015;
 
     const chartData = {
       type: isBuy ? 'BUY' as const : 'SELL' as const,
       entry: currentPrice,
-      tp1: isBuy ? currentPrice + atr * 2 : currentPrice - atr * 2,
-      tp2: isBuy ? currentPrice + atr * 3.5 : currentPrice - atr * 3.5,
-      sl: isBuy ? currentPrice - atr : currentPrice + atr,
+      tp1: isBuy ? currentPrice + tp1Dist : currentPrice - tp1Dist,
+      tp2: isBuy ? currentPrice + tp2Dist : currentPrice - tp2Dist,
+      sl: isBuy ? currentPrice - slDist : currentPrice + slDist,
       confidence: Math.min(85, 55 + Math.round(trendAnalysis.strength * 0.2)),
-      riskReward: '1:2.0',
+      riskReward: professionalATR ? `1:${(atrDistances.tp1 / atrDistances.sl).toFixed(1)}` : '1:2.0',
       pattern: isBuy ? 'Bullish Setup' : 'Bearish Setup',
       killZone: '',
       liquidityType: isBuy ? 'SSL' : 'BSL',

@@ -192,6 +192,85 @@ export function getICTInstrumentTier(pair: string): string {
   return 'Tier 3';
 }
 
+// ─── ATR Calculation (Average True Range) ────────────────────────────
+// PROFESSIONAL: Uses 14-period ATR from OHLCV candles
+// This is the correct way to measure volatility for SL/TP sizing
+export function calculateATR(candles: OHLCVCandle[], period: number = 14): number {
+  if (candles.length < 2) return 0;
+
+  const trueRanges: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const high = candles[i].high;
+    const low = candles[i].low;
+    const prevClose = candles[i - 1].close;
+    // True Range = max(H-L, |H-prevClose|, |L-prevClose|)
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
+    trueRanges.push(tr);
+  }
+
+  if (trueRanges.length < period) {
+    // Not enough data - use simple average of available
+    return trueRanges.reduce((sum, tr) => sum + tr, 0) / trueRanges.length;
+  }
+
+  // Wilder's smoothing method (same as RSI)
+  let atr = trueRanges.slice(0, period).reduce((sum, tr) => sum + tr, 0) / period;
+  for (let i = period; i < trueRanges.length; i++) {
+    atr = (atr * (period - 1) + trueRanges[i]) / period;
+  }
+
+  return atr;
+}
+
+// ─── Calculate professional SL/TP distances based on ATR ────────────
+// Returns distances from entry price (always positive)
+// Mode-specific multipliers:
+// - Scalping: SL=0.8x ATR, TP1=1.6x ATR, TP2=2.5x ATR
+// - Day Trading: SL=1.2x ATR, TP1=2.4x ATR, TP2=3.5x ATR
+// - Swing: SL=1.5x ATR, TP1=3x ATR, TP2=5x ATR
+export function calculateSLTPDistances(
+  candles: OHLCVCandle[],
+  mode: string
+): { sl: number; tp1: number; tp2: number; atr: number } {
+  const atr = calculateATR(candles, 14);
+
+  if (atr <= 0) {
+    // Fallback: use percentage-based
+    return { sl: 0, tp1: 0, tp2: 0, atr: 0 };
+  }
+
+  let slMult: number, tp1Mult: number, tp2Mult: number;
+
+  switch (mode) {
+    case 'scalping':
+      slMult = 0.8;
+      tp1Mult = 1.6;
+      tp2Mult = 2.5;
+      break;
+    case 'daytrading':
+      slMult = 1.2;
+      tp1Mult = 2.4;
+      tp2Mult = 3.5;
+      break;
+    default: // swing
+      slMult = 1.5;
+      tp1Mult = 3.0;
+      tp2Mult = 5.0;
+      break;
+  }
+
+  return {
+    sl: atr * slMult,
+    tp1: atr * tp1Mult,
+    tp2: atr * tp2Mult,
+    atr,
+  };
+}
+
 // ─── EMA Calculation ────────────────────────────────────────────────
 export function calculateEMA(data: number[], period: number): number {
   if (data.length < period) return data[data.length - 1] || 0;

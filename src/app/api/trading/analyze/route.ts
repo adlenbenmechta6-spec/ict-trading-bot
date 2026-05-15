@@ -148,6 +148,27 @@ Be concise and professional. Use specific ICT Core Content month references. Res
       pair
     );
 
+    // ─── FINAL SAFETY CHECK: Verify SL/TP direction after validation ──
+    if (chartData.type === 'BUY') {
+      if (validatedChart.sl >= validatedChart.entry) {
+        console.error(`[ANALYZE FATAL] BUY SL (${validatedChart.sl}) >= entry (${validatedChart.entry}). Force fixing.`);
+        validatedChart.sl = currentPrice - slDist;
+      }
+      if (validatedChart.tp1 <= validatedChart.entry) {
+        console.error(`[ANALYZE FATAL] BUY TP1 (${validatedChart.tp1}) <= entry (${validatedChart.entry}). Force fixing.`);
+        validatedChart.tp1 = currentPrice + tp1Dist;
+      }
+    } else {
+      if (validatedChart.sl <= validatedChart.entry) {
+        console.error(`[ANALYZE FATAL] SELL SL (${validatedChart.sl}) <= entry (${validatedChart.entry}). Force fixing.`);
+        validatedChart.sl = currentPrice + slDist;
+      }
+      if (validatedChart.tp1 >= validatedChart.entry) {
+        console.error(`[ANALYZE FATAL] SELL TP1 (${validatedChart.tp1}) >= entry (${validatedChart.entry}). Force fixing.`);
+        validatedChart.tp1 = currentPrice - tp1Dist;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       pair,

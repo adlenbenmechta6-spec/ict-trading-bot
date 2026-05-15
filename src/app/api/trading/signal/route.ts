@@ -158,6 +158,26 @@ Realistic confidence based on ICT confluence count.`,
           signal.tp2 = parseFloat((isBuySignal ? currentPrice + atrDistances.tp2 : currentPrice - atrDistances.tp2).toFixed(getDecimals(pair)));
           const rrCalc = atrDistances.tp1 / atrDistances.sl;
           signal.riskReward = `1:${rrCalc.toFixed(1)}`;
+
+          // ─── FINAL SAFETY CHECK: Verify SL/TP are logically correct after ATR calc ──
+          // This catches any edge case where ATR calculation might produce wrong direction
+          if (isBuySignal) {
+            // BUY: SL MUST be below entry, TP above entry
+            if (signal.sl >= signal.entry || signal.tp1 <= signal.entry || signal.tp2 <= signal.tp1) {
+              console.error(`[FATAL CHECK] BUY signal still has invalid SL/TP after ATR! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing correct values.`);
+              signal.sl = parseFloat((currentPrice - atrDistances.sl).toFixed(getDecimals(pair)));
+              signal.tp1 = parseFloat((currentPrice + atrDistances.tp1).toFixed(getDecimals(pair)));
+              signal.tp2 = parseFloat((currentPrice + atrDistances.tp2).toFixed(getDecimals(pair)));
+            }
+          } else {
+            // SELL: SL MUST be above entry, TP below entry
+            if (signal.sl <= signal.entry || signal.tp1 >= signal.entry || signal.tp2 >= signal.tp1) {
+              console.error(`[FATAL CHECK] SELL signal still has invalid SL/TP after ATR! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing correct values.`);
+              signal.sl = parseFloat((currentPrice + atrDistances.sl).toFixed(getDecimals(pair)));
+              signal.tp1 = parseFloat((currentPrice - atrDistances.tp1).toFixed(getDecimals(pair)));
+              signal.tp2 = parseFloat((currentPrice - atrDistances.tp2).toFixed(getDecimals(pair)));
+            }
+          }
         }
       } catch {
         signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis);

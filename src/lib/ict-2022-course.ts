@@ -752,6 +752,183 @@ IPDA PRACTICAL:
 - IPDA alone does NOT tell where to buy/sell; blend with time and price
 
 ═══════════════════════════════════════════════════════════════
+VOLUME IMBALANCE (VI)
+═══════════════════════════════════════════════════════════════
+- Volume Imbalance: A range between where one candle's body and another candle's body
+  doesn't touch but there are wicks that overlap in between
+- Can be a difference between a lower close with a higher opening OR
+  a volume imbalance between a higher close and a lower opening
+- Volume imbalances can be traded through MULTIPLE times
+- If you know your bias and where price is likely to draw to at a later time,
+  you can come right back up and go back to respecting the very specific levels:
+  • The Low of the volume imbalance
+  • The Consequent Encroachment midpoint (CE = 50% of VI range)
+  • The High of the volume imbalance
+- VI acts as a magnet for price; price will rebalance through the VI
+
+═══════════════════════════════════════════════════════════════
+RECLAIMED ORDER BLOCK
+═══════════════════════════════════════════════════════════════
+BULLISH RECLAIMED OB:
+- Previously used to buy; short-term bounce confirms minor displacement
+- In buy side of curve = reclaimed longs
+- When price is dropping and has a small displacement upside = smart money
+  new long accumulation
+- Look for reclaimed OBs on the buy side of the premium/discount curve
+
+BEARISH RECLAIMED OB:
+- Previously used to sell; short-term decline confirms minor displacement
+- In sell side of curve = reclaimed shorts
+- When price is rallying and has a small displacement downside = smart money
+  new short accumulation
+- Look for reclaimed OBs on the sell side of the premium/discount curve
+
+═══════════════════════════════════════════════════════════════
+DETAILED SEASONAL PATTERNS
+═══════════════════════════════════════════════════════════════
+EUR/USD SEASONAL:
+- Bottom mid-February → higher into mid-March → pullback → climb into end of April
+- Low in June → climb into late July/early August
+- Decline early August → early September
+- Good time early-late September → decline early October
+- After October: averages diverge, less reliable
+
+GBP/USD SEASONAL:
+- Bottom early-late March → higher into end of April
+- Early-mid May bearish
+- Bottom mid-May → higher into early August
+- Peak early August → decline into early September
+- Top early November → slides into mid-late November
+
+DXY SEASONAL (5, 10, 15 year):
+- Start of year to mid-February: upward bias
+- Tops mid-February → declines into mid-March
+- Last half of March strong → sells off into late April
+- Beginning-mid May strong → falls into short-term low by end of May
+- End May to mid-June: some appreciation
+- Mid-June short-term high → declines into end of July
+- Rally early August to early September
+- Early to late November: rise
+- Late December: bearish
+
+═══════════════════════════════════════════════════════════════
+DETAILED DAILY TEMPLATES (CHAPTER 26)
+═══════════════════════════════════════════════════════════════
+TEMPLATE 1: LONDON SWING TO NY OPEN / LONDON CLOSE REVERSAL
+- Bullish version begins like Classic Buy (decline below opening price → rallies)
+- Buy entry forms → rallies to HTF POI (bearish OB, FVG)
+- On bullish day: LOD in London → runs up → HOD in NY around London Close
+  → runs back down clearing initial London low
+- Monitor last hour of London (4-5 AM) and first hour of NY (7-8 AM)
+  for reversal signs
+
+TEMPLATE 2: CLASSIC BUY OR SELL DAY (BEST template for making money)
+- Wide range trending day; unfolds mostly Mon/Tue (latest Wed)
+  during London session
+- NY gives retracement to continue London trend
+- Daily range lasts 7-8 hours once established
+- Buy Day: Buy when market drops at right time at key support
+  (below opening price); if starts above opening price, wait for it
+  to trade below
+- Distance from open to support: 7-12 points ES average
+- If move > 12 points → wait for NY trade
+- Always take small profit of 5-7 points by 12:00
+- Trend usually lasts into 11:00 EST
+
+TEMPLATE 3: RANGE TO NY OPEN / LONDON CLOSE RALLY
+- Most often during NFP, FOMC, Interest Rate announcements
+- Market originally in consolidation → breaks London lows
+  → rallies after news release
+
+TEMPLATE 4: CONSOLIDATION RAID ON NEWS RELEASE
+- Most often during NFP, FOMC, Interest Rates
+- After opening price → consolidates before news
+- During news: drops to induce traders / take stops
+  (break consolidation)
+- After clearing stops and inducing → moves into true direction
+- Identify key S/R or OB below consolidation
+- If price doesn't reject at S/R within 5 minutes after news
+  → leave trade
+
+═══════════════════════════════════════════════════════════════
+INSIDE BAR CONCEPT FOR DOL
+═══════════════════════════════════════════════════════════════
+- Inside Bar: Forms inside a larger mother bar after a large move
+- Represents a period of consolidation
+- All inside bars on S&P futures mean the previous day's high or low
+  is likely to get taken out as DOL for day traders
+- When an inside day forms (candle completely contained by previous),
+  expect PDH/PDL to be raided
+- Inside bar = consolidation → expansion sequence applies
+- Expansion direction determined by HTF bias and draw on liquidity
+
+═══════════════════════════════════════════════════════════════
+MARKET MAKER BUY MODEL (DETAILED)
+═══════════════════════════════════════════════════════════════
+MARKET MAKER BUY MODEL = Understanding market goes lower to go higher:
+1. Engineering Liquidity: Bearish move creating lower highs
+   (accumulating buy stops above)
+2. Smart Money Reversal: At PD-Array (bottom of the move)
+   — displacement + MSS confirms reversal
+3. Liquidity Hunt: Sweeping old highs (distribution phase)
+   — price targets BSL above after accumulating from discount
+
+MARKET MAKER SELL MODEL = Same components reversed:
+1. Engineering Liquidity: Bullish move creating higher lows
+   (accumulating sell stops below)
+2. Smart Money Reversal: At PD-Array (top of the move)
+   — displacement + MSS confirms reversal
+3. Liquidity Hunt: Sweeping old lows (distribution phase)
+   — price targets SSL below after distributing from premium
+
+═══════════════════════════════════════════════════════════════
+ORDER FLOW FORMATION (DETAILED)
+═══════════════════════════════════════════════════════════════
+BEARISH ORDER FLOW FORMATION:
+1. Ascending structure broken / liquidity grab along trend
+2. Grab of liquidity to buy (smart money accumulates longs at discount)
+3. New lower low and lower high formed
+- Confirmed when price breaks internal buy liquidity and touches bearish zone
+
+BULLISH ORDER FLOW FORMATION:
+1. Descending structure broken / liquidity grab along trend
+2. Grab of liquidity for short (smart money accumulates shorts at premium)
+3. New higher high and higher low formed
+- Confirmed when price breaks internal sell liquidity and touches bullish POI
+  / takes external liquidity
+
+═══════════════════════════════════════════════════════════════
+FOMC/NFP AVOIDANCE RULES (DETAILED)
+═══════════════════════════════════════════════════════════════
+- Avoid Thursday and Friday of NFP Weeks
+- Avoid London Open after FOMC events (whipsaw likely)
+- FOMC 2:00 PM event: First run is often FAKE MOVE (Judas Swing),
+  real move during conference
+- NFP Monday following NFP: If no holiday early in week → avoid
+- When holiday on Mon/Tue/Wed of NFP week → Thu/Fri after NFP
+  become focus
+- Do NOT trade first 10 minutes after NFP release
+- FOMC days: Two-stage move; wait for conference before committing
+- Seek and Destroy profile common on NFP/FOMC: both sides blown out
+
+═══════════════════════════════════════════════════════════════
+BULL/BEAR LIQUIDITY TRAPS
+═══════════════════════════════════════════════════════════════
+BULL TRAP:
+- Bullish structure where next high and low is higher
+- Large player lures traders into buying at the break
+- Reverses after collecting liquidity
+- Do NOT buy at the break of the old HIGH
+- Trapped buyers become fuel (sell stops) for the reversal lower
+
+BEAR TRAP:
+- Bearish structure where next high and low is lower
+- Large player lures traders into selling at the break
+- Reverses after collecting liquidity
+- Do NOT sell at the break of the old LOW
+- Trapped sellers become fuel (buy stops) for the reversal higher
+
+═══════════════════════════════════════════════════════════════
 RISK MANAGEMENT & DISCIPLINE
 ═══════════════════════════════════════════════════════════════
 - Stick & Stay with Your Bias Only

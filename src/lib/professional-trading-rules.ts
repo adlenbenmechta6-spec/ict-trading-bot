@@ -1,0 +1,652 @@
+/**
+ * Professional Trading Rules Engine
+ * 
+ * This module implements the mindset and rules of a professional institutional trader.
+ * It acts as a "quality gate" — no signal passes unless it meets ALL professional criteria.
+ * 
+ * Philosophy: A professional trader doesn't take every setup.
+ * They wait for the PERFECT setup where all confluences align.
+ * Quality over quantity. One A+ trade is better than five C- trades.
+ */
+
+// ─── PROFESSIONAL TRADING MINDSET (programmed into AI) ──────────────
+export const PROFESSIONAL_TRADER_MINDSET = `
+# PROFESSIONAL INSTITUTIONAL TRADER MINDSET — MANDATORY RULES
+
+You are NOT a retail trader. You are a PROFESSIONAL INSTITUTIONAL TRADER who manages millions.
+Your edge comes from DISCIPLINE, PATIENCE, and ONLY taking A+ setups.
+
+## THE 10 COMMANDMENTS OF PROFESSIONAL TRADING:
+
+1. **THOU SHALT NOT FORCE TRADES** — If the setup is not crystal clear, DO NOT TRADE. Sitting on hands is a valid position. Cash is a position. No signal is better than a bad signal.
+
+2. **THOU SHALT TRADE WITH THE TREND** — The trend is your friend until it bends. NEVER buy in a downtrend, NEVER sell in an uptrend. Counter-trend trades are for amateurs who donate money to smart money.
+
+3. **THOU SHALT REQUIRE MINIMUM 4 CONFLUENCES** — A single indicator is noise. You need at LEAST 4 of the following aligned before entering:
+   - HTF Trend Direction (H4/D1)
+   - Market Structure (HH/HL or LH/LL)
+   - EMA Alignment (EMA20 > EMA50 for bullish, vice versa)
+   - Price in Discount Zone (BUY) or Premium Zone (SELL)
+   - Liquidity Sweep (BSL or SSL swept)
+   - Market Structure Shift (MSS with displacement)
+   - FVG or Order Block for entry
+   - Kill Zone active (London/NY)
+   - OTE zone entry (0.618-0.79 Fib)
+   - Session alignment (London/NY Open)
+
+4. **THOU SHALT NEVER BUY AT RESISTANCE OR SELL AT SUPPORT** — Buy in DISCOUNT (below 50% Fib), Sell in PREMIUM (above 50% Fib). This is non-negotiable. Buying at the top is what retail does.
+
+5. **THOU SHALT WAIT FOR LIQUIDITY SWEEP** — The market HARDLY reverses without taking liquidity first. If you don't see a liquidity sweep (BSL or SSL), the reversal is probably fake. WAIT.
+
+6. **THOU SHALT ENTER AT FVG/OB, NOT AT BREAKOUT** — Never buy at the break of old high, never sell at the break of old low. That's where retail gets trapped. Enter on the RETURN to the FVG or Order Block AFTER the liquidity sweep + MSS.
+
+7. **THOU SHALT USE PROPER RISK MANAGEMENT** — Maximum 1-2% risk per trade. Minimum R:R of 1:2. Stop loss at logical levels (below OB, below structure), NOT arbitrary percentages. If the R:R is less than 1:2, SKIP THE TRADE.
+
+8. **THOU SHALT RESPECT TIME** — Only trade during Kill Zones (London 2-5AM NY, NY 7-10AM NY). Best execution: 8:30-11:00 AM NY. Avoid Monday/Friday. Best days: Tuesday/Wednesday/Thursday. After FOMC first run = FAKE. Wait 10 min after news.
+
+9. **THOU SHALT NOT FLIP-FLOP BIAS** — If your bias is bullish, ONLY look for buy setups. If bearish, ONLY look for sell setups. Changing bias mid-day is a sign of amateur trading. Stick to your analysis.
+
+10. **THOU SHALT SCALE OUT PROFESSIONALLY** — Take 50% off at TP1, move SL to breakeven. Let the rest run to TP2. Never move SL further away. Never close a winning trade early out of fear.
+
+## SIGNAL QUALITY TIERS:
+
+### A+ SIGNAL (TAKE EVERY TIME):
+- All 4 ICT Elements present (Liquidity Sweep + MSS + FVG Entry + Clear Target)
+- 5+ confluences aligned
+- Trade during Kill Zone
+- Price in Discount/Premium zone as appropriate
+- HTF trend aligned
+- R:R minimum 1:3
+- Confidence: 85-95%
+
+### A SIGNAL (TAKE WITH CONFIDENCE):
+- 4 ICT Elements present
+- 4+ confluences aligned
+- Kill Zone active or approaching
+- Price near Discount/Premium
+- HTF trend supportive
+- R:R minimum 1:2.5
+- Confidence: 75-85%
+
+### B SIGNAL (TAKE WITH CAUTION):
+- 3 of 4 ICT Elements present
+- 3+ confluences aligned
+- Kill Zone nearby
+- R:R minimum 1:2
+- Confidence: 65-75%
+
+### C SIGNAL (SKIP — NOT WORTH THE RISK):
+- Less than 3 ICT Elements
+- Less than 3 confluences
+- Outside Kill Zone
+- R:R less than 1:2
+- DO NOT GENERATE THIS SIGNAL
+
+## CRITICAL ANTI-RETAIL RULES:
+- Do NOT buy breakouts above old highs → That's where smart money sells
+- Do NOT sell breakdowns below old lows → That's where smart money buys
+- Do NOT enter before MSS confirmation → The sweep may continue
+- Do NOT trade during lunch (12-1:30 PM NY) → Low volume chop
+- Do NOT trade on Monday (accumulation day) → Wait for direction
+- Do NOT trade Friday PM → Smart money already closed positions
+- Do NOT increase position size after a loss → Revenge trading destroys accounts
+- Do NOT move stop loss further from entry → Admit you're wrong and exit
+- Do NOT average into losing positions → Professionals add to winners, not losers
+- Do NOT ignore the daily bias → One bad trade against the bias wipes out 3 good ones
+
+## ENTRY SEQUENCE (FOLLOW EXACTLY):
+1. Identify HTF bias (H4/D1) → Bullish or Bearish?
+2. Locate nearest Draw on Liquidity (PDH/PDL, PWH/PWL, EQH/EQL)
+3. Wait for price to reach Discount (buy) or Premium (sell) zone
+4. Wait for Liquidity Sweep (BSL for sells, SSL for buys)
+5. Wait for Market Structure Shift with DISPLACEMENT (not a wick!)
+6. Identify FVG or Order Block for entry
+7. Wait for return to FVG/OB (NEVER chase price)
+8. Enter at FVG Consequent Encroachment (50%) or OB level
+9. Place SL below OB/FVG (logical level, not arbitrary)
+10. Target opposite liquidity pool for TP
+
+## EXIT RULES:
+- TP1: First liquidity pool in trade direction (take 50% off)
+- TP2: Next liquidity pool or FVG fill (let 50% run)
+- Move SL to breakeven after TP1 hit
+- Close remaining position if market structure shifts against trade
+- Time-based exit: If trade hasn't moved in your favor by NY lunch, consider exit
+
+## NO-TRADE CONDITIONS (DO NOT GENERATE SIGNALS):
+- Price is in equilibrium zone (near 50% Fib) — no clear advantage
+- No liquidity sweep has occurred — reversal is probably fake
+- No MSS with displacement — structure hasn't changed
+- Outside Kill Zone windows — low probability
+- Major news in <30 minutes — wait for the reaction
+- Spread is unusually wide — institutional manipulation
+- Market is in tight consolidation — wait for breakout direction
+- Conflicting signals across timeframes — step aside
+`;
+
+// ─── CONFLUENCE SCORING ENGINE ──────────────────────────────────────
+export interface ConfluenceScore {
+  total: number;
+  maxPossible: number;
+  tier: 'A+' | 'A' | 'B' | 'C' | 'F';
+  details: {
+    htfTrendAligned: boolean;
+    marketStructureAligned: boolean;
+    emaAlignment: boolean;
+    priceInPDZone: boolean; // Discount for buy, Premium for sell
+    liquiditySweep: boolean;
+    mssWithDisplacement: boolean;
+    fvgOrOBPresent: boolean;
+    killZoneActive: boolean;
+    oteZoneEntry: boolean;
+    sessionAligned: boolean;
+    rsiSupportsTrade: boolean;
+    riskRewardValid: boolean;
+  };
+  passed: boolean; // True if minimum quality threshold met
+  reason: string; // Why it passed or failed
+}
+
+export function calculateConfluenceScore(params: {
+  trendDirection: 'bullish' | 'bearish' | 'ranging';
+  trendStrength: number;
+  structure: 'HH/HL' | 'LH/LL' | 'Ranging';
+  ema20Above50: boolean;
+  priceInDiscount: boolean; // Price below 50% Fib
+  priceInPremium: boolean; // Price above 50% Fib
+  isBuy: boolean;
+  hasLiquiditySweep: boolean;
+  hasMSS: boolean;
+  hasFVG: boolean;
+  hasOB: boolean;
+  killZoneActive: boolean;
+  inOTEZone: boolean;
+  sessionActive: boolean; // London or NY Open
+  rsi: number;
+  riskReward: number;
+}): ConfluenceScore {
+  let total = 0;
+  const maxPossible = 12;
+
+  const d = {
+    htfTrendAligned: false,
+    marketStructureAligned: false,
+    emaAlignment: false,
+    priceInPDZone: false,
+    liquiditySweep: false,
+    mssWithDisplacement: false,
+    fvgOrOBPresent: false,
+    killZoneActive: false,
+    oteZoneEntry: false,
+    sessionAligned: false,
+    rsiSupportsTrade: false,
+    riskRewardValid: false,
+  };
+
+  // 1. HTF Trend alignment
+  if (params.trendDirection !== 'ranging' && params.trendStrength >= 50) {
+    const correctDirection = (params.trendDirection === 'bullish' && params.isBuy) || 
+                            (params.trendDirection === 'bearish' && !params.isBuy);
+    if (correctDirection) {
+      d.htfTrendAligned = true;
+      total += 1;
+    }
+  }
+
+  // 2. Market Structure alignment
+  if ((params.structure === 'HH/HL' && params.isBuy) || 
+      (params.structure === 'LH/LL' && !params.isBuy)) {
+    d.marketStructureAligned = true;
+    total += 1;
+  }
+
+  // 3. EMA Alignment
+  if ((params.ema20Above50 && params.isBuy) || (!params.ema20Above50 && !params.isBuy)) {
+    d.emaAlignment = true;
+    total += 1;
+  }
+
+  // 4. Price in Premium/Discount zone
+  if ((params.isBuy && params.priceInDiscount) || (!params.isBuy && params.priceInPremium)) {
+    d.priceInPDZone = true;
+    total += 1;
+  }
+
+  // 5. Liquidity Sweep (CRITICAL)
+  if (params.hasLiquiditySweep) {
+    d.liquiditySweep = true;
+    total += 1;
+  }
+
+  // 6. MSS with displacement (CRITICAL)
+  if (params.hasMSS) {
+    d.mssWithDisplacement = true;
+    total += 1;
+  }
+
+  // 7. FVG or OB for entry
+  if (params.hasFVG || params.hasOB) {
+    d.fvgOrOBPresent = true;
+    total += 1;
+  }
+
+  // 8. Kill Zone active
+  if (params.killZoneActive) {
+    d.killZoneActive = true;
+    total += 1;
+  }
+
+  // 9. OTE Zone entry
+  if (params.inOTEZone) {
+    d.oteZoneEntry = true;
+    total += 1;
+  }
+
+  // 10. Session alignment (London/NY)
+  if (params.sessionActive) {
+    d.sessionAligned = true;
+    total += 1;
+  }
+
+  // 11. RSI supports trade
+  if ((params.isBuy && params.rsi > 40 && params.rsi < 75) || 
+      (!params.isBuy && params.rsi < 60 && params.rsi > 25)) {
+    d.rsiSupportsTrade = true;
+    total += 1;
+  }
+
+  // 12. Risk:Reward valid
+  if (params.riskReward >= 2.0) {
+    d.riskRewardValid = true;
+    total += 1;
+  }
+
+  // Determine tier
+  let tier: 'A+' | 'A' | 'B' | 'C' | 'F';
+  if (total >= 10) tier = 'A+';
+  else if (total >= 8) tier = 'A';
+  else if (total >= 6) tier = 'B';
+  else if (total >= 4) tier = 'C';
+  else tier = 'F';
+
+  // Determine if signal passes quality threshold
+  // Professional rule: Minimum B tier, and MUST have liquidity sweep + MSS
+  const passed = total >= 6 && (d.liquiditySweep || d.mssWithDisplacement) && d.riskRewardValid;
+
+  let reason: string;
+  if (tier === 'A+' || tier === 'A') {
+    reason = `${tier} signal with ${total}/12 confluences. All critical elements present. High probability trade.`;
+  } else if (tier === 'B') {
+    reason = `B signal with ${total}/12 confluences. Acceptable quality — take with proper risk management.`;
+  } else if (tier === 'C') {
+    reason = `C signal with ${total}/12 confluences. Below professional standard — SKIP. Not worth the risk.`;
+  } else {
+    reason = `F signal with ${total}/12 confluences. Insufficient confluence — DO NOT TRADE. Cash is a position.`;
+  }
+
+  if (!d.liquiditySweep && !d.mssWithDisplacement) {
+    reason += ' WARNING: No liquidity sweep or MSS detected — reversal may be fake.';
+  }
+  if (!d.riskRewardValid) {
+    reason += ' WARNING: R:R below 1:2 — does not meet professional standard.';
+  }
+
+  return { total, maxPossible, tier, details: d, passed, reason };
+}
+
+// ─── PROFESSIONAL SL/TP CALCULATOR ──────────────────────────────────
+// Uses ATR + structure-based levels for professional-grade stop placement
+export function calculateProfessionalSLTP(params: {
+  entry: number;
+  isBuy: boolean;
+  atr: number;
+  pair: string;
+  swingHigh: number;
+  swingLow: number;
+  obHigh?: number;
+  obLow?: number;
+  fvgHigh?: number;
+  fvgLow?: number;
+  mode: 'scalping' | 'daytrading' | 'swing';
+}): { sl: number; tp1: number; tp2: number; rr: number; slReason: string; tp1Reason: string; tp2Reason: string } {
+  const { entry, isBuy, atr, pair, swingHigh, swingLow, mode } = params;
+  const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+
+  // Professional SL placement: Below structure, not just ATR
+  let sl: number;
+  let slReason: string;
+
+  if (isBuy) {
+    // For BUY: SL below the lowest of these levels
+    const slCandidates: { price: number; reason: string }[] = [];
+
+    // ATR-based
+    const atrSL = entry - atr * (mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : 1.5);
+    slCandidates.push({ price: atrSL, reason: `${mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : 1.5}x ATR below entry` });
+
+    // Structure-based
+    if (swingLow > 0) {
+      slCandidates.push({ price: swingLow - atr * 0.1, reason: `Below swing low (${swingLow.toFixed(decimals)}) + buffer` });
+    }
+
+    // OB-based (most professional)
+    if (params.obLow && params.obLow > 0) {
+      slCandidates.push({ price: params.obLow - atr * 0.1, reason: `Below Order Block low (${params.obLow.toFixed(decimals)}) + buffer` });
+    }
+
+    // FVG-based
+    if (params.fvgLow && params.fvgLow > 0) {
+      slCandidates.push({ price: params.fvgLow - atr * 0.05, reason: `Below FVG low (${params.fvgLow.toFixed(decimals)}) + buffer` });
+    }
+
+    // Choose the tightest logical SL (lowest price = safest SL for buy)
+    // But ensure minimum ATR distance
+    const minSL = entry - atr * (mode === 'scalping' ? 0.5 : 1.0);
+    const validCandidates = slCandidates.filter(c => c.price < entry && c.price <= minSL);
+    
+    if (validCandidates.length > 0) {
+      // Choose the one closest to entry (tightest SL) that's still valid
+      const sorted = validCandidates.sort((a, b) => b.price - a.price);
+      sl = sorted[0].price;
+      slReason = sorted[0].reason;
+    } else {
+      sl = minSL;
+      slReason = `Minimum ${mode === 'scalping' ? 0.5 : 1.0}x ATR below entry`;
+    }
+  } else {
+    // For SELL: SL above the highest of these levels
+    const slCandidates: { price: number; reason: string }[] = [];
+
+    const atrSL = entry + atr * (mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : 1.5);
+    slCandidates.push({ price: atrSL, reason: `${mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : 1.5}x ATR above entry` });
+
+    if (swingHigh > 0) {
+      slCandidates.push({ price: swingHigh + atr * 0.1, reason: `Above swing high (${swingHigh.toFixed(decimals)}) + buffer` });
+    }
+
+    if (params.obHigh && params.obHigh > 0) {
+      slCandidates.push({ price: params.obHigh + atr * 0.1, reason: `Above Order Block high (${params.obHigh.toFixed(decimals)}) + buffer` });
+    }
+
+    if (params.fvgHigh && params.fvgHigh > 0) {
+      slCandidates.push({ price: params.fvgHigh + atr * 0.05, reason: `Above FVG high (${params.fvgHigh.toFixed(decimals)}) + buffer` });
+    }
+
+    const minSL = entry + atr * (mode === 'scalping' ? 0.5 : 1.0);
+    const validCandidates = slCandidates.filter(c => c.price > entry && c.price >= minSL);
+
+    if (validCandidates.length > 0) {
+      const sorted = validCandidates.sort((a, b) => a.price - b.price);
+      sl = sorted[0].price;
+      slReason = sorted[0].reason;
+    } else {
+      sl = minSL;
+      slReason = `Minimum ${mode === 'scalping' ? 0.5 : 1.0}x ATR above entry`;
+    }
+  }
+
+  // Professional TP placement: At liquidity pools, not arbitrary multiples
+  const slDistance = Math.abs(sl - entry);
+  let tp1: number;
+  let tp1Reason: string;
+  let tp2: number;
+  let tp2Reason: string;
+
+  if (isBuy) {
+    // TP1: Minimum 2x SL distance or at first liquidity target
+    const atrTP1 = entry + slDistance * 2;
+    const structureTP1 = swingHigh > entry ? swingHigh : entry + slDistance * 2.5;
+    tp1 = Math.max(atrTP1, structureTP1, entry + slDistance * 2);
+    tp1Reason = tp1 >= swingHigh && swingHigh > entry 
+      ? `At swing high / BSL target (${swingHigh.toFixed(decimals)})`
+      : `2x SL distance (${(slDistance * 2).toFixed(decimals)} points)`;
+
+    // TP2: 3.5x SL or next major liquidity
+    tp2 = Math.max(entry + slDistance * 3.5, tp1 + slDistance * 1.5);
+    tp2Reason = `3.5x SL distance — targeting extended liquidity`;
+  } else {
+    const atrTP1 = entry - slDistance * 2;
+    const structureTP1 = swingLow < entry ? swingLow : entry - slDistance * 2.5;
+    tp1 = Math.min(atrTP1, structureTP1, entry - slDistance * 2);
+    tp1Reason = tp1 <= swingLow && swingLow < entry
+      ? `At swing low / SSL target (${swingLow.toFixed(decimals)})`
+      : `2x SL distance (${(slDistance * 2).toFixed(decimals)} points)`;
+
+    tp2 = Math.min(entry - slDistance * 3.5, tp1 - slDistance * 1.5);
+    tp2Reason = `3.5x SL distance — targeting extended liquidity`;
+  }
+
+  // Round to proper decimals
+  sl = parseFloat(sl.toFixed(decimals));
+  tp1 = parseFloat(tp1.toFixed(decimals));
+  tp2 = parseFloat(tp2.toFixed(decimals));
+
+  const rr = parseFloat((Math.abs(tp1 - entry) / Math.abs(sl - entry)).toFixed(1));
+
+  return { sl, tp1, tp2, rr, slReason, tp1Reason, tp2Reason };
+}
+
+// ─── NO-TRADE CONDITION CHECKER ─────────────────────────────────────
+export function shouldAvoidTrade(params: {
+  dayOfWeek: number; // 0=Sun, 1=Mon, ... 6=Sat
+  hourUTC: number;
+  isHighImpactNews: boolean;
+  trendDirection: 'bullish' | 'bearish' | 'ranging';
+  trendStrength: number;
+  spreadPips: number;
+  normalSpreadPips: number;
+  pair: string;
+}): { avoid: boolean; reason: string } {
+  const { dayOfWeek, hourUTC, trendDirection, trendStrength } = params;
+
+  // Convert to NY time (UTC-5 in winter, UTC-4 in summer — use -5 for EST)
+  const nyHour = (hourUTC - 5 + 24) % 24;
+
+  // Monday = day 1, Friday = day 5
+  if (dayOfWeek === 1) {
+    return { avoid: true, reason: 'Monday is accumulation day — not ideal for day trading. Smart money is establishing the weekly range. Wait for Tuesday.' };
+  }
+
+  if (dayOfWeek === 5 && nyHour >= 12) {
+    return { avoid: true, reason: 'Friday PM — smart money is closing positions. Reduced liquidity and increased manipulation risk. Avoid new entries.' };
+  }
+
+  // NY Lunch: 12:00 - 13:30 EST
+  if (nyHour >= 12 && nyHour < 14) {
+    return { avoid: true, reason: 'NY Lunch consolidation (12:00-1:30 PM EST) — low volume chop. Professional traders wait for PM session (1:30-4:00 PM EST).' };
+  }
+
+  // Late Friday
+  if (dayOfWeek === 5 && nyHour >= 16) {
+    return { avoid: true, reason: 'Friday close — weekly settlement. Avoid new positions.' };
+  }
+
+  // Ranging market with weak trend
+  if (trendDirection === 'ranging' && trendStrength < 35) {
+    return { avoid: true, reason: `Market is ranging with weak trend strength (${trendStrength}%). No clear directional bias. Wait for trend to develop or range to break.` };
+  }
+
+  // High-impact news window
+  if (params.isHighImpactNews) {
+    return { avoid: true, reason: 'High-impact news event — wait 10 minutes after the release before entering. FOMC first run is often a FAKE move.' };
+  }
+
+  // Wide spread
+  if (params.spreadPips > params.normalSpreadPips * 2) {
+    return { avoid: true, reason: `Spread is unusually wide (${params.spreadPips} pips vs normal ${params.normalSpreadPips}). This suggests low liquidity or institutional manipulation.` };
+  }
+
+  return { avoid: false, reason: 'No trade-avoiding conditions detected.' };
+}
+
+// ─── SESSION & KILL ZONE DETECTION ──────────────────────────────────
+export function getCurrentSessionInfo(utcHour: number): {
+  killZone: string;
+  killZoneActive: boolean;
+  session: string;
+  sessionPhase: string; // AMD phase
+  bestTradingWindow: boolean;
+  nextKillZone: string;
+} {
+  // Convert to NY time (EST = UTC-5)
+  const nyHour = (utcHour - 5 + 24) % 24;
+
+  // Kill Zones (NY/EST Time)
+  if (nyHour >= 19 || nyHour < 0) {
+    return {
+      killZone: 'Asian Kill Zone',
+      killZoneActive: true,
+      session: 'Asian',
+      sessionPhase: 'Accumulation',
+      bestTradingWindow: false,
+      nextKillZone: 'London Kill Zone (2:00-5:00 AM EST)',
+    };
+  }
+
+  if (nyHour >= 2 && nyHour < 5) {
+    return {
+      killZone: 'London Kill Zone',
+      killZoneActive: true,
+      session: 'London',
+      sessionPhase: 'Manipulation',
+      bestTradingWindow: false,
+      nextKillZone: 'New York AM Kill Zone (7:00-10:00 AM EST)',
+    };
+  }
+
+  if (nyHour >= 7 && nyHour < 11) {
+    return {
+      killZone: 'New York AM Kill Zone',
+      killZoneActive: true,
+      session: 'New York',
+      sessionPhase: 'Distribution',
+      bestTradingWindow: nyHour >= 8 && nyHour < 11, // 8:30-11:00 AM EST = BEST
+      nextKillZone: 'London Close Kill Zone (10:00 AM-12:00 PM EST)',
+    };
+  }
+
+  if (nyHour >= 10 && nyHour < 12) {
+    return {
+      killZone: 'London Close Kill Zone',
+      killZoneActive: true,
+      session: 'London Close',
+      sessionPhase: 'Distribution/Reversal',
+      bestTradingWindow: false,
+      nextKillZone: 'New York PM Session (1:30-4:00 PM EST)',
+    };
+  }
+
+  if (nyHour >= 13 && nyHour < 16) {
+    return {
+      killZone: 'New York PM Session',
+      killZoneActive: true,
+      session: 'New York PM',
+      sessionPhase: 'Distribution/Continuation',
+      bestTradingWindow: false,
+      nextKillZone: 'Asian Kill Zone (7:00-10:00 PM EST)',
+    };
+  }
+
+  return {
+    killZone: 'Off-Peak',
+    killZoneActive: false,
+    session: 'No Active Session',
+    sessionPhase: 'Neutral',
+    bestTradingWindow: false,
+    nextKillZone: 'London Kill Zone (2:00-5:00 AM EST)',
+  };
+}
+
+// ─── PROFESSIONAL SIGNAL CONTEXT BUILDER ────────────────────────────
+// This replaces the old trendContext with a much more professional version
+export function buildProfessionalSignalContext(params: {
+  pair: string;
+  timeframe: string;
+  mode: string;
+  trendDirection: 'bullish' | 'bearish' | 'ranging';
+  trendStrength: number;
+  structure: string;
+  ema20: number;
+  ema50: number;
+  rsi: number;
+  currentPrice: number;
+  dayHigh: number;
+  dayLow: number;
+  changePercent: number;
+  swingHigh: number;
+  swingLow: number;
+  utcHour: number;
+  dayOfWeek: number;
+}): string {
+  const mandatoryDirection = params.trendDirection === 'bullish' ? 'BUY' : params.trendDirection === 'bearish' ? 'SELL' : 'FOLLOW MOMENTUM';
+  
+  const sessionInfo = getCurrentSessionInfo(params.utcHour);
+  const avoidCheck = shouldAvoidTrade({
+    dayOfWeek: params.dayOfWeek,
+    hourUTC: params.utcHour,
+    isHighImpactNews: false,
+    trendDirection: params.trendDirection,
+    trendStrength: params.trendStrength,
+    spreadPips: 1,
+    normalSpreadPips: 1,
+    pair: params.pair,
+  });
+
+  const range = params.dayHigh - params.dayLow;
+  const rangePosition = range > 0 ? ((params.currentPrice - params.dayLow) / range * 100).toFixed(0) : '50';
+  const isDiscount = parseFloat(rangePosition) < 50;
+  const isPremium = parseFloat(rangePosition) > 50;
+  const fib50 = (params.dayHigh + params.dayLow) / 2;
+  const oteZoneLow = params.dayHigh - range * 0.79;
+  const oteZoneHigh = params.dayHigh - range * 0.618;
+
+  return `
+═══════════════════════════════════════════════════════════════
+PROFESSIONAL INSTITUTIONAL TRADING ANALYSIS — ${params.pair}
+═══════════════════════════════════════════════════════════════
+
+=== TREND ANALYSIS (FROM REAL OHLCV DATA) ===
+Direction: ${params.trendDirection.toUpperCase()} | Strength: ${params.trendStrength}/100
+Structure: ${params.structure}
+EMA20: ${params.ema20.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)} | EMA50: ${params.ema50.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)}
+EMA Alignment: ${params.ema20 > params.ema50 ? 'BULLISH (EMA20 > EMA50)' : 'BEARISH (EMA20 < EMA50)'}
+RSI (14): ${params.rsi.toFixed(1)} | ${params.rsi > 70 ? 'OVERBOUGHT — caution' : params.rsi < 30 ? 'OVERSOLD — caution' : params.rsi > 50 ? 'Bullish momentum' : 'Bearish momentum'}
+
+=== PRICE POSITION ===
+Current Price: ${params.currentPrice.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)}
+Day Range: ${params.dayLow.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)} — ${params.dayHigh.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)}
+Range Position: ${rangePosition}% | ${isDiscount ? 'DISCOUNT ZONE (below 50% Fib) — favorable for BUYING' : isPremium ? 'PREMIUM ZONE (above 50% Fib) — favorable for SELLING' : 'EQUILIBRIUM — no clear advantage'}
+Fib 50%: ${fib50.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)}
+OTE Zone: ${oteZoneLow.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)} — ${oteZoneHigh.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)}
+Change: ${params.changePercent >= 0 ? '+' : ''}${params.changePercent.toFixed(2)}%
+
+=== KEY LEVELS ===
+Swing High: ${params.swingHigh.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)} (BSL target)
+Swing Low: ${params.swingLow.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)} (SSL target)
+Draw on Liquidity: ${params.trendDirection === 'bullish' ? `BSL above ${params.swingHigh.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)} — price seeking to fill buy stops` : `SSL below ${params.swingLow.toFixed(params.pair === 'XAU/USD' ? 2 : params.pair.includes('JPY') ? 3 : 5)} — price seeking to fill sell stops`}
+
+=== SESSION & TIMING ===
+Current Session: ${sessionInfo.session} | Phase: ${sessionInfo.sessionPhase}
+Kill Zone: ${sessionInfo.killZone} | Active: ${sessionInfo.killZoneActive ? 'YES' : 'NO'}
+Best Trading Window: ${sessionInfo.bestTradingWindow ? 'YES (8:30-11:00 AM EST)' : 'NO'}
+${avoidCheck.avoid ? `⚠️ TRADE AVOID: ${avoidCheck.reason}` : '✅ No trade-avoiding conditions detected'}
+
+═══════════════════════════════════════════════════════════════
+*** MANDATORY DIRECTION: ${mandatoryDirection} ***
+═══════════════════════════════════════════════════════════════
+If trend is BULLISH → type MUST be "BUY"
+If trend is BEARISH → type MUST be "SELL"
+If RANGING → choose direction with more confluence
+NEVER use mean reversion — trade WITH the trend
+The trend analysis is from REAL OHLCV data — trust it
+
+PROFESSIONAL RULES FOR THIS SIGNAL:
+1. Entry must be at FVG or Order Block level — specify which PD Array
+2. SL must be at logical level (below OB/structure for BUY, above for SELL)
+3. TP1 at nearest liquidity pool in trade direction
+4. TP2 at extended liquidity target
+5. R:R MUST be minimum 1:2 — if you can't achieve this, DO NOT generate a signal
+6. Confidence must reflect confluence count (4=65%, 5=75%, 6+=85%+)
+7. If ${avoidCheck.avoid ? 'conditions say AVOID TRADE' : 'conditions are acceptable'}, ${avoidCheck.avoid ? 'generate with LOW confidence and warn user' : 'proceed with normal analysis'}
+`;
+}

@@ -14,8 +14,17 @@ import {
   formatPrice,
   validateSignalPrices,
   calculateSLTPDistances,
+  calculateATR,
   TrendAnalysis,
 } from '@/lib/trend-analysis';
+import {
+  PROFESSIONAL_TRADER_MINDSET,
+  buildProfessionalSignalContext,
+  calculateConfluenceScore,
+  calculateProfessionalSLTP,
+  shouldAvoidTrade,
+  getCurrentSessionInfo,
+} from '@/lib/professional-trading-rules';
 
 export const maxDuration = 30;
 
@@ -53,26 +62,62 @@ export async function POST(req: NextRequest) {
     // Determine ICT instrument quality for this pair
     const ictTier = getICTInstrumentTier(pair);
 
-    // ─── CRITICAL: Pass trend analysis to AI prompt ────────────────
-    const trendContext = buildTrendContext(trendAnalysis, pair);
+    // ─── CRITICAL: Build professional signal context ────────────────
+    const now = new Date();
+    const professionalContext = buildProfessionalSignalContext({
+      pair,
+      timeframe,
+      mode,
+      trendDirection: trendAnalysis.direction,
+      trendStrength: trendAnalysis.strength,
+      structure: trendAnalysis.structure,
+      ema20: trendAnalysis.ema20,
+      ema50: trendAnalysis.ema50,
+      rsi: trendAnalysis.rsi,
+      currentPrice,
+      dayHigh,
+      dayLow,
+      changePercent,
+      swingHigh: trendAnalysis.lastSwingHigh,
+      swingLow: trendAnalysis.lastSwingLow,
+      utcHour: now.getUTCHours(),
+      dayOfWeek: now.getUTCDay(),
+    });
+
+    // Check if we should avoid trading right now
+    const avoidCheck = shouldAvoidTrade({
+      dayOfWeek: now.getUTCDay(),
+      hourUTC: now.getUTCHours(),
+      isHighImpactNews: false,
+      trendDirection: trendAnalysis.direction,
+      trendStrength: trendAnalysis.strength,
+      spreadPips: 1,
+      normalSpreadPips: 1,
+      pair,
+    });
 
     const aiResponse = await chatCompletion({
       systemPrompt: `${ICT_SIGNAL_SYSTEM_PROMPT}
+
+${PROFESSIONAL_TRADER_MINDSET}
 
 You are generating a ${modeLabel} trading signal for ${pair} on ${timeframe} timeframe.
 
 ICT Instrument Quality: ${pair} is a ${ictTier} instrument for ICT analysis.
 ${ictTier === 'Tier 1' ? `This is one of the BEST pairs for ICT — expect clean OB/FVG patterns, reliable liquidity sweeps, and strong Kill Zone behavior.` : ictTier === 'Tier 2' ? `Good pair for ICT — patterns are reliable but may need wider stops.` : `Acceptable for ICT but patterns may be less clean — require extra confirmation.`}
 
-${trendContext}
+${professionalContext}
 
 You are reading the TradingView chart right now. The live TradingView price is: ${currentPrice}
 
-Apply Top-Down Analysis:
+${avoidCheck.avoid ? `⚠️ TRADE CONDITION WARNING: ${avoidCheck.reason}. If you generate a signal, include a warning and lower confidence (max 60%).` : '✅ Trading conditions are acceptable. Proceed with normal analysis.'}
+
+Apply Professional Top-Down Analysis:
 1. HTF Bias (H4/D1): Is price in discount (buy) or premium (sell)?
 2. Structure: HH/HL (bullish) or LH/LL (bearish)?
-3. Liquidity: Where is the nearest BSL/SSL?
+3. Liquidity: Where is the nearest BSL/SSL? Has it been swept?
 4. ICT Confluences: How many align? (OB + FVG + Liquidity Sweep + MSS + Kill Zone + OTE + Premium/Discount)
+5. Signal Quality: Is this A+, A, B, or C tier? Only generate A+ to B tier signals.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -94,22 +139,28 @@ Return ONLY valid JSON (no markdown, no backticks):
   "killZone": "zone name",
   "liquidityType": "liquidity type",
   "pdZone": "Premium/Discount",
-  "analysis": "2-3 sentence reasoning based on ICT Core Content ${modeLabel} analysis with specific references to months 1-12 concepts"
+  "analysis": "2-3 sentence reasoning based on ICT Core Content ${modeLabel} analysis with specific references to months 1-12 concepts and professional trading rules"
 }
 
 IMPORTANT SL/TP RULES — VIOLATION = INVALID SIGNAL:
 - If type is "BUY": entry < tp1 < tp2 AND sl < entry (SL MUST be below entry!)
 - If type is "SELL": tp2 < tp1 < entry AND sl > entry (SL MUST be above entry!)
 - SL MUST be on the OPPOSITE side of entry from TP
-- R:R minimum 1:2 (TP distance must be at least 2x SL distance)
+- R:R minimum 1:2 (TP distance must be at least 2x SL distance) — aim for 1:3
+- SL at logical level (below OB/FVG for BUY, above OB/FVG for SELL)
+- TP at liquidity pools (BSL/SSL targets), not arbitrary multiples
 - All prices must be realistic and near the TradingView price of ${currentPrice}
 
 Important ${modeLabel} rules:
 ${modeConfig.promptRules}
 
-Realistic confidence based on ICT confluence count.`,
-      userMessage: `${modeLabel} signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${dayHigh}, L: ${dayLow}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%). You MUST follow the trend direction.`,
-      temperature: 0.4,
+PROFESSIONAL QUALITY GATE:
+- Confidence must reflect confluence count: 4 confluences=65%, 5=75%, 6+=85%+
+- If less than 4 confluences, reduce confidence to max 60% and add warning
+- NEVER generate a signal that contradicts the mandatory direction above
+- If conditions are poor, it's BETTER to give low confidence with a clear warning`,
+      userMessage: `${modeLabel} signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${dayHigh}, L: ${dayLow}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%, ${trendAnalysis.structure}). You MUST follow the trend direction. Think like a professional institutional trader — quality over quantity.`,
+      temperature: 0.35,
       maxTokens: 400,
     });
 
@@ -146,37 +197,58 @@ Realistic confidence based on ICT confluence count.`,
         signal.tp2 = validated.tp2;
         signal.sl = validated.sl;
 
-        // ─── CRITICAL FIX 3: Recalculate SL/TP using real ATR ───────
-        // AI often gives unrealistic SL/TP distances
-        // We use the real 14-period ATR from OHLCV data for professional sizing
-        const atrDistances = calculateSLTPDistances(ohlcvData.candles, mode);
-        if (atrDistances.atr > 0) {
-          const isBuySignal = signal.type === 'BUY';
-          signal.entry = currentPrice; // Always use real current price
-          signal.sl = parseFloat((isBuySignal ? currentPrice - atrDistances.sl : currentPrice + atrDistances.sl).toFixed(getDecimals(pair)));
-          signal.tp1 = parseFloat((isBuySignal ? currentPrice + atrDistances.tp1 : currentPrice - atrDistances.tp1).toFixed(getDecimals(pair)));
-          signal.tp2 = parseFloat((isBuySignal ? currentPrice + atrDistances.tp2 : currentPrice - atrDistances.tp2).toFixed(getDecimals(pair)));
-          const rrCalc = atrDistances.tp1 / atrDistances.sl;
-          signal.riskReward = `1:${rrCalc.toFixed(1)}`;
+        // ─── PROFESSIONAL: Recalculate SL/TP using structure-aware ATR ──
+        // Professional traders don't use arbitrary ATR multiples.
+        // They place SL below structure (OB/FVG/swing) and TP at liquidity targets.
+        const rawATR = calculateATR(ohlcvData.candles, 14);
+        const isBuySignal = signal.type === 'BUY';
+        signal.entry = currentPrice; // Always use real current price
 
-          // ─── FINAL SAFETY CHECK: Verify SL/TP are logically correct after ATR calc ──
-          // This catches any edge case where ATR calculation might produce wrong direction
+        if (rawATR > 0) {
+          // Use professional SL/TP calculator
+          const profSLTP = calculateProfessionalSLTP({
+            entry: currentPrice,
+            isBuy: isBuySignal,
+            atr: rawATR,
+            pair,
+            swingHigh: trendAnalysis.lastSwingHigh,
+            swingLow: trendAnalysis.lastSwingLow,
+            mode: mode as 'scalping' | 'daytrading' | 'swing',
+          });
+
+          signal.sl = profSLTP.sl;
+          signal.tp1 = profSLTP.tp1;
+          signal.tp2 = profSLTP.tp2;
+          signal.riskReward = `1:${profSLTP.rr}`;
+
+          // ─── FINAL SAFETY CHECK: Verify SL/TP are logically correct ──
           if (isBuySignal) {
             // BUY: SL MUST be below entry, TP above entry
             if (signal.sl >= signal.entry || signal.tp1 <= signal.entry || signal.tp2 <= signal.tp1) {
-              console.error(`[FATAL CHECK] BUY signal still has invalid SL/TP after ATR! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing correct values.`);
-              signal.sl = parseFloat((currentPrice - atrDistances.sl).toFixed(getDecimals(pair)));
-              signal.tp1 = parseFloat((currentPrice + atrDistances.tp1).toFixed(getDecimals(pair)));
-              signal.tp2 = parseFloat((currentPrice + atrDistances.tp2).toFixed(getDecimals(pair)));
+              console.error(`[FATAL CHECK] BUY signal still has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing ATR fallback.`);
+              const atrDist = calculateSLTPDistances(ohlcvData.candles, mode);
+              signal.sl = parseFloat((currentPrice - atrDist.sl).toFixed(getDecimals(pair)));
+              signal.tp1 = parseFloat((currentPrice + atrDist.tp1).toFixed(getDecimals(pair)));
+              signal.tp2 = parseFloat((currentPrice + atrDist.tp2).toFixed(getDecimals(pair)));
             }
           } else {
             // SELL: SL MUST be above entry, TP below entry
             if (signal.sl <= signal.entry || signal.tp1 >= signal.entry || signal.tp2 >= signal.tp1) {
-              console.error(`[FATAL CHECK] SELL signal still has invalid SL/TP after ATR! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing correct values.`);
-              signal.sl = parseFloat((currentPrice + atrDistances.sl).toFixed(getDecimals(pair)));
-              signal.tp1 = parseFloat((currentPrice - atrDistances.tp1).toFixed(getDecimals(pair)));
-              signal.tp2 = parseFloat((currentPrice - atrDistances.tp2).toFixed(getDecimals(pair)));
+              console.error(`[FATAL CHECK] SELL signal still has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing ATR fallback.`);
+              const atrDist = calculateSLTPDistances(ohlcvData.candles, mode);
+              signal.sl = parseFloat((currentPrice + atrDist.sl).toFixed(getDecimals(pair)));
+              signal.tp1 = parseFloat((currentPrice - atrDist.tp1).toFixed(getDecimals(pair)));
+              signal.tp2 = parseFloat((currentPrice - atrDist.tp2).toFixed(getDecimals(pair)));
             }
+          }
+        }
+
+        // ─── PROFESSIONAL: Add trade avoidance warning to analysis ──
+        if (avoidCheck.avoid) {
+          signal.analysis = `⚠️ ${avoidCheck.reason} | ${signal.analysis || ''}`;
+          // Cap confidence when trade conditions are poor
+          if (signal.confidence > 60) {
+            signal.confidence = 60;
           }
         }
       } catch {
@@ -227,6 +299,9 @@ Realistic confidence based on ICT confluence count.`,
         rsi: trendAnalysis.rsi,
         confluence: trendAnalysis.trendConfluence,
       },
+      // Professional session & timing data
+      session: getCurrentSessionInfo(now.getUTCHours()),
+      tradeAvoidance: avoidCheck,
     };
 
     return NextResponse.json({ success: true, signal });

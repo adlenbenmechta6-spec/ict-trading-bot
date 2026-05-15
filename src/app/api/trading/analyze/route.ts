@@ -15,6 +15,12 @@ import {
   calculateSLTPDistances,
   TrendAnalysis,
 } from '@/lib/trend-analysis';
+import {
+  PROFESSIONAL_TRADER_MINDSET,
+  buildProfessionalSignalContext,
+  shouldAvoidTrade,
+  getCurrentSessionInfo,
+} from '@/lib/professional-trading-rules';
 
 export const maxDuration = 30;
 

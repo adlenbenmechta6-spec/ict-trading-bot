@@ -217,6 +217,7 @@ export const PAIRS = [
   { symbol: 'GBP/USD', name: 'Pound/Dollar', category: 'Forex' },
   { symbol: 'USD/JPY', name: 'Dollar/Yen', category: 'Forex' },
   { symbol: 'XAU/USD', name: 'Gold/Dollar', category: 'Metals' },
+  { symbol: 'XAG/USD', name: 'Silver/Dollar', category: 'Metals' },
   { symbol: 'BTC/USD', name: 'Bitcoin/Dollar', category: 'Crypto' },
   { symbol: 'ETH/USD', name: 'Ethereum/Dollar', category: 'Crypto' },
   { symbol: 'US30', name: 'Dow Jones', category: 'Indices' },

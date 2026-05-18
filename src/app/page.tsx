@@ -125,7 +125,7 @@ function generateId(): string {
 }
 
 const TRADING_PAIRS = [
-  'EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'BTC/USD', 'ETH/USD',
+  'EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'XAG/USD', 'BTC/USD', 'ETH/USD',
   'US30', 'NAS100', 'GBP/JPY', 'AUD/USD',
 ];
 

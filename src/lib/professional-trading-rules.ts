@@ -310,7 +310,7 @@ export function calculateProfessionalSLTP(params: {
   mode: 'scalping' | 'daytrading' | 'swing';
 }): { sl: number; tp1: number; tp2: number; rr: number; slReason: string; tp1Reason: string; tp2Reason: string } {
   const { entry, isBuy, atr, pair, swingHigh, swingLow, mode } = params;
-  const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+  const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
 
   // Professional SL placement: Below structure, not just ATR
   let sl: number;

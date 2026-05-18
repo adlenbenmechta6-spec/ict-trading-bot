@@ -38,8 +38,8 @@ function priceToY(price: number, minPrice: number, maxPrice: number): number {
 }
 
 function formatPrice(price: number, pair: string): string {
-  if (pair.includes('JPY') || pair === 'XAU/USD' || pair.startsWith('US') || pair.startsWith('NAS')) {
-    return price.toFixed(2);
+  if (pair.includes('JPY') || pair === 'XAU/USD' || pair === 'XAG/USD' || pair.startsWith('US') || pair.startsWith('NAS')) {
+    return pair === 'XAG/USD' ? price.toFixed(3) : price.toFixed(2);
   }
   return price.toFixed(5);
 }

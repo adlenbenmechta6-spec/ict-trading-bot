@@ -65,6 +65,7 @@ const YAHOO_SYMBOLS: Record<string, string> = {
   'GBP/USD': 'GBPUSD=X',
   'USD/JPY': 'USDJPY=X',
   'XAU/USD': 'GC=F',
+  'XAG/USD': 'SI=F',
   'BTC/USD': 'BTC-USD',
   'ETH/USD': 'ETH-USD',
   'US30': 'YM=F',
@@ -84,6 +85,7 @@ function isValidPrice(pair: string, price: number): boolean {
     'GBP/USD': [1.1, 1.5],
     'USD/JPY': [100, 200],
     'XAU/USD': [2000, 6000],
+    'XAG/USD': [20, 60],
     'BTC/USD': [20000, 200000],
     'ETH/USD': [1000, 10000],
     'US30': [35000, 60000],
@@ -102,9 +104,9 @@ function isValidPrice(pair: string, price: number): boolean {
 }
 
 function buildMarketData(pair: string, price: number, source: string, extra?: Partial<MarketData>): MarketData {
-  const decimals = pair.includes('JPY') || pair === 'XAU/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+  const decimals = pair.includes('JPY') || pair === 'XAU/USD' || pair === 'XAG/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? (pair === 'XAG/USD' ? 3 : 2) : 5;
   const volMap: Record<string, number> = {
-    'XAU/USD': 0.008, 'BTC/USD': 0.03, 'ETH/USD': 0.035,
+    'XAU/USD': 0.008, 'XAG/USD': 0.012, 'BTC/USD': 0.03, 'ETH/USD': 0.035,
     'EUR/USD': 0.005, 'GBP/USD': 0.006, 'USD/JPY': 0.006,
     'US30': 0.008, 'NAS100': 0.012, 'US500': 0.008,
   };
@@ -295,14 +297,14 @@ function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
   // Use realistic base prices
   const basePrices: Record<string, number> = {
     'EUR/USD': 1.08500, 'GBP/USD': 1.27200, 'USD/JPY': 155.50,
-    'XAU/USD': 3350.00, 'BTC/USD': 95000, 'ETH/USD': 3500,
+    'XAU/USD': 3350.00, 'XAG/USD': 33.50, 'BTC/USD': 95000, 'ETH/USD': 3500,
     'US30': 42000, 'NAS100': 19500, 'US500': 5600,
     'GBP/JPY': 197.80, 'AUD/USD': 0.64500,
   };
 
   const currentPrice = basePrices[pair] || 1.0;
   const volMap: Record<string, number> = {
-    'XAU/USD': 0.008, 'BTC/USD': 0.03, 'ETH/USD': 0.035,
+    'XAU/USD': 0.008, 'XAG/USD': 0.012, 'BTC/USD': 0.03, 'ETH/USD': 0.035,
     'EUR/USD': 0.005, 'GBP/USD': 0.006, 'USD/JPY': 0.006,
     'US30': 0.008, 'NAS100': 0.012, 'US500': 0.008,
   };
@@ -439,6 +441,7 @@ async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
     'GBP/USD': 'GBP/USD',
     'USD/JPY': 'USD/JPY',
     'XAU/USD': 'XAU/USD',
+    'XAG/USD': 'XAG/USD',
     'BTC/USD': 'BTC/USD',
     'ETH/USD': 'ETH/USD',
     'US30': 'US30',

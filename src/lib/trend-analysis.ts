@@ -282,7 +282,7 @@ export function aiContradictsTrend(
 
 // ─── ICT Instrument Tier Classification ──────────────────────────────
 export function getICTInstrumentTier(pair: string): string {
-  const tier1 = ['EUR/USD', 'GBP/USD', 'XAU/USD', 'NAS100'];
+  const tier1 = ['EUR/USD', 'GBP/USD', 'XAU/USD', 'XAG/USD', 'NAS100'];
   const tier2 = ['USD/JPY', 'GBP/JPY', 'US30', 'US500'];
   const tier3 = ['AUD/USD', 'USD/CAD', 'NZD/USD', 'EUR/GBP', 'USD/CHF'];
   const tier4 = ['BTC/USD', 'ETH/USD'];
@@ -465,12 +465,12 @@ export function analyzeMarketStructure(candles: OHLCVCandle[]): {
 
 // ─── Format price with appropriate decimals ─────────────────────────
 export function formatPrice(pair: string, price: number): string {
-  const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+  const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
   return price.toFixed(decimals);
 }
 
 export function getDecimals(pair: string): number {
-  return pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+  return pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
 }
 
 // ─── VALIDATE SIGNAL PRICES (SL/TP) ────────────────────────────────
@@ -503,6 +503,7 @@ export function validateSignalPrices(
   // These are realistic minimum SL/TP distances that make sense for each asset
   const minDistancePct: number = (() => {
     if (pair === 'XAU/USD') return 0.003;      // 0.3% = ~$10 on $3300 gold (realistic)
+    if (pair === 'XAG/USD') return 0.003;      // 0.3% = ~$1 on $33 silver (realistic)
     if (pair.startsWith('NAS') || pair === 'US30' || pair === 'US500') return 0.003;  // 0.3% for indices
     if (pair.includes('JPY')) return 0.002;     // 0.2% for JPY pairs
     if (pair.startsWith('BTC') || pair.startsWith('ETH')) return 0.005; // 0.5% for crypto

@@ -103,14 +103,21 @@ function recordTwelveDataUsage(credits: number = 1) {
   twelveDataUsage.creditsUsedToday += credits;
 }
 
-// ─── TWELVE DATA FREE PLAN COMPATIBILITY ───────────────────────────
-// These pairs work on the Twelve Data free plan (real-time)
-// Pairs NOT in this list require paid plan and will be skipped
+// ─── TWELVE DATA PAIR SUPPORT ─────────────────────────────────────
+// We try ALL pairs on Twelve Data. If a pair requires a paid plan,
+// the API will return an error and we'll gracefully fall back.
+// Previously we skipped pairs not in the "free" list, but that
+// caused XAG/USD to always use delayed Yahoo Finance data.
+//
+// Track pairs that FAILED on Twelve Data (to avoid retrying every request)
+const TWELVE_DATA_FAILED_PAIRS: Set<string> = new Set();
+
+// Pairs confirmed to work on the free plan (no need to re-verify)
 const TWELVE_DATA_FREE_PAIRS: Set<string> = new Set([
   'EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'GBP/JPY',
   'AUD/USD', 'USD/CAD', 'NZD/USD', 'ETH/USD', 'BTC/USD',
+  'XAG/USD', 'USD/CHF', 'EUR/GBP', 'US30', 'NAS100', 'US500',
 ]);
-// Note: XAG/USD, US30, NAS100, US500, USD/CHF, EUR/GBP require paid plan
 
 // Yahoo Finance symbol mapping
 const YAHOO_SYMBOLS: Record<string, string> = {
@@ -338,14 +345,13 @@ async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
   const symbol = TWELVE_DATA_SYMBOLS[pair];
   if (!symbol) return null;
 
-  // Skip pairs that require paid plan on Twelve Data
-  if (!TWELVE_DATA_FREE_PAIRS.has(pair)) {
-    console.log(`[Twelve Data] Skipping ${pair} — requires paid plan. Will use alternative source.`);
-    return null;
-  }
-
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) return null;
+
+  // Skip pairs that previously failed on Twelve Data (paid plan required or other error)
+  if (TWELVE_DATA_FAILED_PAIRS.has(pair)) {
+    return null;
+  }
 
   // Check rate limit before making API call
   if (!canUseTwelveData()) {
@@ -366,8 +372,8 @@ async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
     // Check for API errors (e.g. paid plan required)
     if (quoteData.status === 'error') {
       console.warn(`[Twelve Data] API error for ${pair}: ${quoteData.message}`);
-      // Mark this pair as requiring paid plan so we don't try again
-      TWELVE_DATA_FREE_PAIRS.delete(pair);
+      // Mark this pair as failed so we don't retry every request
+      TWELVE_DATA_FAILED_PAIRS.add(pair);
       return null;
     }
 
@@ -717,7 +723,9 @@ async function fetchFromYahooFinance(pair: string): Promise<MarketData | null> {
 }
 
 // ─── MAIN PRICE FETCHING FUNCTION ──────────────────────────────────
-// Priority: Twelve Data (real-time) → Metals Fetcher (for XAG/XAU) → Finnhub (real-time) → Yahoo Finance (delayed)
+// Priority: Twelve Data (real-time) → Finnhub (real-time) → Yahoo Finance (delayed)
+// KEY CHANGE: Try Twelve Data FIRST for ALL pairs (including XAG/USD, indices)
+// Only fall back to other sources if Twelve Data fails or rate-limited
 export async function fetchRealPrice(pair: string): Promise<MarketData> {
   // Check cache first (30 second TTL)
   const cached = priceCache[pair];
@@ -725,31 +733,24 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
     return cached.data;
   }
 
-  // For metals (XAG/USD, XAU/USD), use the enhanced metals fetcher
-  // which uses 1m candles for near-real-time data
-  const isMetal = pair === 'XAG/USD' || pair === 'XAU/USD';
-
-  // Try all sources in parallel for speed, pick the best one
-  const fetchPromises: Promise<MarketData | null>[] = [
-    fetchFromTwelveData(pair),         // Real-time for free plan pairs
-    fetchFromFinnhub(pair),            // Real-time if API key available
-  ];
-
-  // For metals, use the enhanced metals fetcher instead of generic Yahoo
-  if (isMetal) {
-    fetchPromises.push(fetchMetalsPrice(pair));
-  } else {
-    fetchPromises.push(fetchFromYahooFinance(pair));
+  // ─── STRATEGY 1: Try Twelve Data first (real-time for ALL pairs) ───
+  const twelveData = await fetchFromTwelveData(pair);
+  if (twelveData && twelveData.priceQuality === 'realtime') {
+    console.log(`[PRICE] ${pair}: Using Twelve Data REAL-TIME price ${twelveData.price}`);
+    priceCache[pair] = { data: twelveData, expiry: Date.now() + CACHE_TTL };
+    return twelveData;
   }
 
-  const [twelveResult, finnhubResult, metalOrYahooResult] = await Promise.allSettled(fetchPromises);
+  // ─── STRATEGY 2: Try Finnhub if available ───
+  const finnhubData = await fetchFromFinnhub(pair);
 
-  const twelveData = twelveResult.status === 'fulfilled' ? twelveResult.value : null;
-  const finnhubData = finnhubResult.status === 'fulfilled' ? finnhubResult.value : null;
-  const yahooData = metalOrYahooResult.status === 'fulfilled' ? metalOrYahooResult.value : null;
+  // ─── STRATEGY 3: Try Yahoo Finance or Metals Fetcher ───
+  const isMetal = pair === 'XAG/USD' || pair === 'XAU/USD';
+  const yahooData = isMetal
+    ? await fetchMetalsPrice(pair)
+    : await fetchFromYahooFinance(pair);
 
   // Pick the best available source by quality
-  // Priority: realtime > near-realtime > delayed > stale
   const qualityOrder = { 'realtime': 0, 'near-realtime': 1, 'delayed': 2, 'stale': 3 };
 
   const candidates = [twelveData, finnhubData, yahooData].filter(Boolean) as MarketData[];
@@ -991,9 +992,8 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) return null;
 
-  // Skip pairs that require paid plan on Twelve Data
-  if (!TWELVE_DATA_FREE_PAIRS.has(pair)) {
-    console.log(`[Twelve Data OHLCV] Skipping ${pair} — requires paid plan. Using Yahoo Finance for candles.`);
+  // Skip pairs that previously failed on Twelve Data (paid plan required or other error)
+  if (TWELVE_DATA_FAILED_PAIRS.has(pair)) {
     return null;
   }
 
@@ -1020,9 +1020,9 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
 
     const data = await response.json();
     if (data.status === 'error' || !data.values || data.values.length === 0) {
-      // Mark pair as requiring paid plan if error
+      // Mark pair as failed if API error so we don't retry
       if (data.status === 'error') {
-        TWELVE_DATA_FREE_PAIRS.delete(pair);
+        TWELVE_DATA_FAILED_PAIRS.add(pair);
       }
       return null;
     }

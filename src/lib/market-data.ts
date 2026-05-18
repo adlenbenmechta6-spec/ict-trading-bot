@@ -85,7 +85,7 @@ function isValidPrice(pair: string, price: number): boolean {
     'GBP/USD': [1.1, 1.5],
     'USD/JPY': [100, 200],
     'XAU/USD': [2000, 6000],
-    'XAG/USD': [20, 60],
+    'XAG/USD': [50, 120],
     'BTC/USD': [20000, 200000],
     'ETH/USD': [1000, 10000],
     'US30': [35000, 60000],
@@ -297,7 +297,7 @@ function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
   // Use realistic base prices
   const basePrices: Record<string, number> = {
     'EUR/USD': 1.08500, 'GBP/USD': 1.27200, 'USD/JPY': 155.50,
-    'XAU/USD': 3350.00, 'XAG/USD': 33.50, 'BTC/USD': 95000, 'ETH/USD': 3500,
+    'XAU/USD': 3350.00, 'XAG/USD': 75.00, 'BTC/USD': 95000, 'ETH/USD': 3500,
     'US30': 42000, 'NAS100': 19500, 'US500': 5600,
     'GBP/JPY': 197.80, 'AUD/USD': 0.64500,
   };

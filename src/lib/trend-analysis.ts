@@ -503,7 +503,7 @@ export function validateSignalPrices(
   // These are realistic minimum SL/TP distances that make sense for each asset
   const minDistancePct: number = (() => {
     if (pair === 'XAU/USD') return 0.003;      // 0.3% = ~$10 on $3300 gold (realistic)
-    if (pair === 'XAG/USD') return 0.003;      // 0.3% = ~$1 on $33 silver (realistic)
+    if (pair === 'XAG/USD') return 0.003;      // 0.3% = ~$0.23 on $75 silver (realistic)
     if (pair.startsWith('NAS') || pair === 'US30' || pair === 'US500') return 0.003;  // 0.3% for indices
     if (pair.includes('JPY')) return 0.002;     // 0.2% for JPY pairs
     if (pair.startsWith('BTC') || pair.startsWith('ETH')) return 0.005; // 0.5% for crypto

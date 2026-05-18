@@ -217,8 +217,14 @@ ${professionalContext}
 
 You have access to REAL computed analysis data from OHLCV candles. DO NOT fabricate or hallucinate indicator values — use ONLY the data provided below.
 
+═══ PRICE DATA QUALITY ═══
+- Price Source: ${priceSource}
+- Price Quality: ${priceQuality} ${isRealtime ? '✅ REAL-TIME' : `⚠️ ~${delayMinutes}min delayed`}
+- Recommended Style: ${tradingStyleRec.style} — ${tradingStyleRec.reason}
+${tradingStyleRec.warning ? `- WARNING: ${tradingStyleRec.warning}` : ''}
+
 ═══ REAL COMPUTED ANALYSIS DATA ═══
-- Live Price: ${currentPrice}
+- Live Price: ${currentPrice} ${isRealtime ? '(Real-time ✅)' : `(~${delayMinutes}min delayed ⚠️)`}
 - Day High: ${dayHigh}, Day Low: ${dayLow}
 - Trend: ${trendAnalysis.direction} (${trendAnalysis.strength}%, ${trendAnalysis.structure}, ${trendAnalysis.trendConfluence}/7 confluence votes)
 - EMA20: ${formatPrice(pair, trendAnalysis.ema20)}, EMA50: ${formatPrice(pair, trendAnalysis.ema50)}

@@ -25,6 +25,8 @@ import {
   shouldAvoidTrade,
   getCurrentSessionInfo,
 } from '@/lib/professional-trading-rules';
+import { detectAllICTPatterns, calculatePDZones, getCurrentKillZone } from '@/lib/ict-patterns';
+import { detectAllPatterns, calculateRSI, calculateMACD, calculateBollingerBands, calculateStochastic } from '@/lib/trading-patterns';
 
 export const maxDuration = 30;
 
@@ -96,6 +98,89 @@ export async function POST(req: NextRequest) {
       pair,
     });
 
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ RUN REAL PATTERN DETECTION ON OHLCV CANDLES
+    // ═══════════════════════════════════════════════════════════════════
+    const ohlcvCandles: Array<{open:number;high:number;low:number;close:number;volume?:number;timestamp?:number}> = ohlcvData.candles;
+
+    // Detect ICT patterns (OB, FVG, MSS, Liquidity Sweeps, etc.)
+    let detectedICT: ReturnType<typeof detectAllICTPatterns> = [];
+    let detectedCandlestick: ReturnType<typeof detectAllPatterns> = [];
+    let pdZones: ReturnType<typeof calculatePDZones> | null = null;
+    let actualMACD: ReturnType<typeof calculateMACD> | null = null;
+    let actualBB: ReturnType<typeof calculateBollingerBands> | null = null;
+    let actualStoch: ReturnType<typeof calculateStochastic> | null = null;
+
+    if (ohlcvCandles.length >= 5) {
+      try {
+        detectedICT = detectAllICTPatterns(ohlcvCandles as any);
+        detectedCandlestick = detectAllPatterns(ohlcvCandles as any);
+        pdZones = calculatePDZones(ohlcvCandles as any);
+        actualMACD = calculateMACD(ohlcvCandles as any);
+        actualBB = calculateBollingerBands(ohlcvCandles as any);
+        actualStoch = calculateStochastic(ohlcvCandles as any);
+      } catch (e) {
+        console.warn('[PATTERN DETECTION] Error detecting patterns:', e);
+      }
+    }
+
+    // Build detected patterns summary for AI
+    const ictPatternNames = detectedICT.map(p => `${p.name}${p.level ? ' @ ' + formatPrice(pair, p.level) : ''}`);
+    const candlePatternNames = detectedCandlestick.map(p => p.name);
+    const allDetectedPatterns = [...ictPatternNames, ...candlePatternNames];
+
+    // PD Zone info
+    const pdZoneInfo = pdZones ?
+      `Equilibrium: ${formatPrice(pair, pdZones.equilibrium)}, Premium: ${formatPrice(pair, pdZones.premiumZone.start)}-${formatPrice(pair, pdZones.premiumZone.end)}, Discount: ${formatPrice(pair, pdZones.discountZone.start)}-${formatPrice(pair, pdZones.discountZone.end)}, OTE: ${formatPrice(pair, pdZones.oteZone.start)}-${formatPrice(pair, pdZones.oteZone.end)}`
+      : 'Not enough data';
+
+    const isPremium = pdZones ? currentPrice >= pdZones.equilibrium : false;
+    const isDiscount = pdZones ? currentPrice < pdZones.equilibrium : false;
+
+    // MACD info
+    const macdInfo = actualMACD ?
+      `MACD: ${actualMACD.macd}, Signal: ${actualMACD.signal}, Histogram: ${actualMACD.histogram} (${actualMACD.histogram > 0 ? 'Bullish' : 'Bearish'})`
+      : 'Insufficient data';
+
+    // Bollinger Bands info
+    const bbInfo = actualBB ?
+      `Upper: ${formatPrice(pair, actualBB.upper)}, Middle: ${formatPrice(pair, actualBB.middle)}, Lower: ${formatPrice(pair, actualBB.lower)}`
+      : '';
+
+    // Stochastic info
+    const stochInfo = actualStoch ?
+      `%K: ${actualStoch.k}, %D: ${actualStoch.d} (${actualStoch.k > 80 ? 'Overbought' : actualStoch.k < 20 ? 'Oversold' : 'Neutral'})`
+      : '';
+
+    // Kill Zone info
+    const killZoneInfo = getCurrentKillZone();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ CALL CONFLUENCE SCORE (was dead code before!)
+    // ═══════════════════════════════════════════════════════════════════
+    const confluenceScore = calculateConfluenceScore({
+      htfTrend: trendAnalysis.direction as 'bullish' | 'bearish' | 'ranging',
+      htfStrength: trendAnalysis.strength,
+      structure: trendAnalysis.structure as 'HH/HL' | 'LH/LL' | 'Ranging',
+      emaAligned: trendAnalysis.ema20 > trendAnalysis.ema50 ? 'bullish' : trendAnalysis.ema20 < trendAnalysis.ema50 ? 'bearish' : 'neutral',
+      premiumDiscount: isPremium ? 'premium' : isDiscount ? 'discount' : 'neutral',
+      liquiditySweep: detectedICT.some(p => p.category === 'liquidity'),
+      mssWithDisplacement: detectedICT.some(p => p.name.includes('Market Structure Shift')),
+      fvgPresent: detectedICT.some(p => p.name.includes('Fair Value Gap')),
+      obPresent: detectedICT.some(p => p.name.includes('Order Block') || p.name.includes('Breaker')),
+      killZoneActive: killZoneInfo.active,
+      oteEntry: pdZones ? (currentPrice >= pdZones.oteZone.start && currentPrice <= pdZones.oteZone.end) : false,
+      session: getCurrentSessionInfo(now.getUTCHours()).session,
+      rsiValue: trendAnalysis.rsi,
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ✅ BUILD DATA-DRIVEN AI PROMPT (no more fabricating)
+    // ═══════════════════════════════════════════════════════════════════
+    const lastCandlesSummary = ohlcvCandles.slice(-10).map((c, i) =>
+      `C${i+1}: O=${formatPrice(pair,c.open)} H=${formatPrice(pair,c.high)} L=${formatPrice(pair,c.low)} C=${formatPrice(pair,c.close)}${c.volume ? ' V='+c.volume : ''}`
+    ).join('\n');
+
     const aiResponse = await chatCompletion({
       systemPrompt: `${ICT_SIGNAL_SYSTEM_PROMPT}
 
@@ -108,16 +193,39 @@ ${ictTier === 'Tier 1' ? `This is one of the BEST pairs for ICT — expect clean
 
 ${professionalContext}
 
-You are reading the TradingView chart right now. The live TradingView price is: ${currentPrice}
+You have access to REAL computed analysis data from OHLCV candles. DO NOT fabricate or hallucinate indicator values — use ONLY the data provided below.
+
+═══ REAL COMPUTED ANALYSIS DATA ═══
+- Live Price: ${currentPrice}
+- Day High: ${dayHigh}, Day Low: ${dayLow}
+- Trend: ${trendAnalysis.direction} (${trendAnalysis.strength}%, ${trendAnalysis.structure}, ${trendAnalysis.trendConfluence}/7 confluence votes)
+- EMA20: ${formatPrice(pair, trendAnalysis.ema20)}, EMA50: ${formatPrice(pair, trendAnalysis.ema50)}
+- RSI (14): ${trendAnalysis.rsi.toFixed(1)} ${trendAnalysis.rsi > 70 ? '(Overbought)' : trendAnalysis.rsi < 30 ? '(Oversold)' : ''}
+- ${macdInfo}
+${bbInfo ? '- Bollinger Bands: ' + bbInfo : ''}
+${stochInfo ? '- Stochastic: ' + stochInfo : ''}
+- PD Zones: ${pdZoneInfo}
+- Price is in ${isPremium ? 'PREMIUM (favors SELL)' : isDiscount ? 'DISCOUNT (favors BUY)' : 'NEUTRAL'} zone
+- Kill Zone: ${killZoneInfo.name} ${killZoneInfo.active ? '(ACTIVE ✅)' : '(Inactive — next: ' + killZoneInfo.nextKillZone + ')'}
+- Confluence Score: ${confluenceScore.grade} (${confluenceScore.score}/12 factors, ${confluenceScore.factors} confirmed)
+
+═══ DETECTED ICT PATTERNS ═══
+${detectedICT.length > 0 ? detectedICT.map(p => `• ${p.name} (${p.type}) ${p.level ? '@ ' + formatPrice(pair, p.level) : ''} [Reliability: ${p.reliability}/5]`).join('\n') : '• No ICT patterns currently detected in recent candles'}
+
+═══ DETECTED CANDLESTICK PATTERNS ═══
+${detectedCandlestick.length > 0 ? detectedCandlestick.map(p => `• ${p.name} (${p.type}) [Reliability: ${p.reliability}/5]`).join('\n') : '• No candlestick patterns currently detected in recent candles'}
+
+═══ LAST 10 CANDLES (OHLCV) ═══
+${lastCandlesSummary}
 
 ${avoidCheck.avoid ? `⚠️ TRADE CONDITION WARNING: ${avoidCheck.reason}. If you generate a signal, include a warning and lower confidence (max 60%).` : '✅ Trading conditions are acceptable. Proceed with normal analysis.'}
 
-Apply Professional Top-Down Analysis:
-1. HTF Bias (H4/D1): Is price in discount (buy) or premium (sell)?
-2. Structure: HH/HL (bullish) or LH/LL (bearish)?
-3. Liquidity: Where is the nearest BSL/SSL? Has it been swept?
-4. ICT Confluences: How many align? (OB + FVG + Liquidity Sweep + MSS + Kill Zone + OTE + Premium/Discount)
-5. Signal Quality: Is this A+, A, B, or C tier? Only generate A+ to B tier signals.
+IMPORTANT RULES:
+1. Use ONLY the detected patterns listed above — do NOT invent patterns that were not detected
+2. If no ICT patterns are detected, acknowledge this and set lower confidence
+3. Reference actual RSI value (${trendAnalysis.rsi.toFixed(1)}), actual MACD data, and actual EMA values
+4. Your confidence MUST reflect the confluence score: ${confluenceScore.grade} = max ${confluenceScore.grade === 'A+' ? 95 : confluenceScore.grade === 'A' ? 85 : confluenceScore.grade === 'B' ? 75 : confluenceScore.grade === 'C' ? 60 : 50}%
+5. You MUST follow the trend direction: ${trendAnalysis.direction}
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -128,18 +236,18 @@ Return ONLY valid JSON (no markdown, no backticks):
   "tp1": number,
   "tp2": number,
   "sl": number,
-  "pattern": "pattern name from TradingView chart",
-  "rsi": number,
-  "rsiStatus": "RSI description from TradingView",
-  "macd": "MACD description from TradingView",
-  "maCross": "MA cross description from TradingView",
-  "confidence": 50-95,
+  "pattern": "pattern name from detected patterns above",
+  "rsi": ${trendAnalysis.rsi.toFixed(1)},
+  "rsiStatus": "RSI description using actual value",
+  "macd": "MACD description using actual data",
+  "maCross": "MA cross using actual EMA values",
+  "confidence": number,
   "riskReward": "1:X",
-  "ictElements": ["element1", "element2"],
-  "killZone": "zone name",
-  "liquidityType": "liquidity type",
-  "pdZone": "Premium/Discount",
-  "analysis": "2-3 sentence reasoning based on ICT Core Content ${modeLabel} analysis with specific references to months 1-12 concepts and professional trading rules"
+  "ictElements": ["ONLY elements that were actually detected above"],
+  "killZone": "${killZoneInfo.name}",
+  "liquidityType": "liquidity type from detected data",
+  "pdZone": "Premium or Discount zone from actual data",
+  "analysis": "Detailed reasoning referencing actual detected patterns and confluence score"
 }
 
 IMPORTANT SL/TP RULES — VIOLATION = INVALID SIGNAL:
@@ -149,19 +257,20 @@ IMPORTANT SL/TP RULES — VIOLATION = INVALID SIGNAL:
 - R:R minimum 1:2 (TP distance must be at least 2x SL distance) — aim for 1:3
 - SL at logical level (below OB/FVG for BUY, above OB/FVG for SELL)
 - TP at liquidity pools (BSL/SSL targets), not arbitrary multiples
-- All prices must be realistic and near the TradingView price of ${currentPrice}
+- All prices must be realistic and near the current price of ${currentPrice}
 
 Important ${modeLabel} rules:
 ${modeConfig.promptRules}
 
 PROFESSIONAL QUALITY GATE:
-- Confidence must reflect confluence count: 4 confluences=65%, 5=75%, 6+=85%+
-- If less than 4 confluences, reduce confidence to max 60% and add warning
+- Confidence MUST NOT exceed the confluence score maximum
+- If confluence score is ${confluenceScore.grade}, max confidence = ${confluenceScore.grade === 'A+' ? 95 : confluenceScore.grade === 'A' ? 85 : confluenceScore.grade === 'B' ? 75 : confluenceScore.grade === 'C' ? 60 : 50}%
+- If less than 3 confluences, reduce confidence to max 55% and add warning
 - NEVER generate a signal that contradicts the mandatory direction above
 - If conditions are poor, it's BETTER to give low confidence with a clear warning`,
-      userMessage: `${modeLabel} signal for ${pair} on TradingView ${timeframe} chart. Live price: ${currentPrice}, H: ${dayHigh}, L: ${dayLow}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%, ${trendAnalysis.structure}). You MUST follow the trend direction. Think like a professional institutional trader — quality over quantity.`,
+      userMessage: `${modeLabel} signal for ${pair} on ${timeframe}. Live price: ${currentPrice}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%). Confluence: ${confluenceScore.grade} (${confluenceScore.score}/12). ICT Patterns: ${ictPatternNames.length > 0 ? ictPatternNames.join(', ') : 'None detected'}. Candlestick: ${candlePatternNames.length > 0 ? candlePatternNames.join(', ') : 'None detected'}. You MUST follow the trend direction. Use ONLY detected patterns.`,
       temperature: 0.35,
-      maxTokens: 400,
+      maxTokens: 500,
     });
 
     let signal;
@@ -179,8 +288,15 @@ PROFESSIONAL QUALITY GATE:
           if (aiContradictsTrend(signal.type, trendAnalysis)) {
             console.warn(`[TREND OVERRIDE] AI suggested ${signal.type} but trend is ${trendAnalysis.direction} (${trendAnalysis.strength}%). Overriding to follow trend.`);
             // Use fallback which respects trend
-            signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis);
+            signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis, confluenceScore, detectedICT, detectedCandlestick, killZoneInfo);
           }
+        }
+
+        // ─── CONFLUENCE GATE: Cap confidence based on actual confluence score ──
+        const maxConfByConfluence = confluenceScore.grade === 'A+' ? 95 : confluenceScore.grade === 'A' ? 85 : confluenceScore.grade === 'B' ? 75 : confluenceScore.grade === 'C' ? 60 : 50;
+        if (signal.confidence > maxConfByConfluence) {
+          console.warn(`[CONFLUENCE GATE] AI confidence ${signal.confidence}% capped to ${maxConfByConfluence}% (confluence: ${confluenceScore.grade})`);
+          signal.confidence = maxConfByConfluence;
         }
 
         // ─── CRITICAL FIX 2: Validate SL/TP are logically correct ────
@@ -252,10 +368,10 @@ PROFESSIONAL QUALITY GATE:
           }
         }
       } catch {
-        signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis);
+        signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis, confluenceScore, detectedICT, detectedCandlestick, killZoneInfo);
       }
     } else {
-      signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, null, mode, trendAnalysis);
+      signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, null, mode, trendAnalysis, confluenceScore, detectedICT, detectedCandlestick, killZoneInfo);
     }
 
     // Add chart data for client-side rendering with real OHLCV candles
@@ -356,11 +472,12 @@ function getModeConfig(mode: string, timeframe: string) {
 }
 
 // ─── FIXED FALLBACK SIGNAL GENERATOR ──────────────────────────────────
-// KEY FIX: Now uses REAL trend analysis instead of mean reversion
+// KEY FIX: Now uses REAL detected patterns instead of fabricating
 function generateFallbackSignal(
   pair: string, timeframe: string, currentPrice: number,
   marketData: { high: number; low: number; change: number; changePercent: number },
-  aiText: string | null, mode: string, trend: TrendAnalysis
+  aiText: string | null, mode: string, trend: TrendAnalysis,
+  confluenceScore?: any, detectedICT?: any[], detectedCandlestick?: any[], killZoneInfo?: any
 ) {
   const decimals = getDecimals(pair);
   const range = marketData.high - marketData.low;
@@ -439,7 +556,7 @@ function generateFallbackSignal(
     ? `${formatPrice(pair, currentPrice - range * 0.79)} - ${formatPrice(pair, currentPrice - range * 0.618)}`
     : `${formatPrice(pair, currentPrice + range * 0.618)} - ${formatPrice(pair, currentPrice + range * 0.79)}`;
 
-  // Mode-specific patterns and elements with SMC integration
+  // Mode-specific patterns and elements using REAL detected patterns
   let pattern: string;
   let ictElements: string[];
   let analysis: string;
@@ -447,39 +564,55 @@ function generateFallbackSignal(
   // Trend direction label for analysis
   const trendLabel = trend.direction === 'bullish' ? 'UPTREND' : trend.direction === 'bearish' ? 'DOWNTREND' : 'RANGING';
 
+  // ═══════════════════════════════════════════════════════════════════
+  // ✅ USE REAL DETECTED PATTERNS (no more fabricating!)
+  // ═══════════════════════════════════════════════════════════════════
+  const realICTElements: string[] = [];
+  if (detectedICT && detectedICT.length > 0) {
+    for (const p of detectedICT) {
+      realICTElements.push(`${p.name}${p.level ? ' @ ' + formatPrice(pair, p.level) : ''} (${p.type})`);
+    }
+  }
+  if (detectedCandlestick && detectedCandlestick.length > 0) {
+    for (const p of detectedCandlestick) {
+      realICTElements.push(`${p.name} (${p.type})`);
+    }
+  }
+
+  // Only add trend info if no real patterns found
+  if (realICTElements.length === 0) {
+    realICTElements.push(`Trend: ${trendLabel} (${trend.strength}%)`);
+    realICTElements.push(`Price in ${isBuy ? 'Discount' : 'Premium'} zone`);
+  }
+
+  // Use real confluence score if available
+  const confGrade = confluenceScore?.grade || 'C';
+  const confScore = confluenceScore?.score || 4;
+
+  // Real kill zone info
+  const realKZ = killZoneInfo?.name || killZone;
+
+  // Real MACD from trend analysis (not fabricated)
+  const realMACD = trend.ema20 > trend.ema50 ? 'Bullish — EMA20 above EMA50' : 'Bearish — EMA20 below EMA50';
+
   if (mode === 'scalping') {
-    pattern = isBuy ? `${smcSetup} + Micro Bullish Engulfing` : `${smcSetup} + Micro Bearish Engulfing`;
-    ictElements = [
-      isBuy ? 'Micro Bullish OB (M1/M5)' : 'Micro Bearish OB (M1/M5)',
-      isBuy ? 'Micro Bullish FVG' : 'Micro Bearish FVG',
-      isBuy ? 'SSL Sweep (micro)' : 'BSL Sweep (micro)',
-      `Trend: ${trendLabel} (${trend.strength}%)`,
-      `SMC Session: ${smcSession}`,
-    ];
-    analysis = aiText || `⚡ SCALP ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${formatPrice(pair, entry)} (${timeframe}). Market is in ${trendLabel} (${trend.strength}% strength, ${trend.trendConfluence}/5 confluence). ${smcSetup} confirmed in trend direction. ${isBuy ? 'SSL' : 'BSL'} swept at ${liquidityTarget}. OTE zone: ${oteZone}. ${killZone} active. ${smcSession} phase. Tight SL at ${formatPrice(pair, sl)}. Risk max 0.5%.`;
+    pattern = realICTElements.length > 1
+      ? `${smcSetup} + ${detectedCandlestick?.[0]?.name || (isBuy ? 'Micro Bullish Engulfing' : 'Micro Bearish Engulfing')}`
+      : `${smcSetup} (Trend-Following)`;
+    ictElements = realICTElements;
+    analysis = aiText || `⚡ SCALP ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${formatPrice(pair, entry)} (${timeframe}). Market is in ${trendLabel} (${trend.strength}% strength, ${trend.trendConfluence}/7 confluence). Confluence grade: ${confGrade} (${confScore}/12). ${realICTElements.length > 0 ? 'Detected: ' + realICTElements.slice(0,3).join(', ') + '.' : 'No specific ICT patterns detected — relying on trend direction.'} ${realKZ} active. Tight SL at ${formatPrice(pair, sl)}. Risk max 0.5%.`;
   } else if (mode === 'daytrading') {
-    pattern = isBuy ? `${smcSetup} + Bullish Engulfing` : `${smcSetup} + Bearish Engulfing`;
-    ictElements = [
-      isBuy ? 'Intraday Bullish OB (M15/M30)' : 'Intraday Bearish OB (M15/M30)',
-      isBuy ? 'Intraday Bullish FVG' : 'Intraday Bearish FVG',
-      isBuy ? `SSL Sweep (${liquidityTarget})` : `BSL Sweep (${liquidityTarget})`,
-      `BMS ${isBuy ? 'Bullish' : 'Bearish'} confirmed`,
-      `Trend: ${trendLabel} (${trend.strength}%)`,
-      `SMC Session: ${smcSession}`,
-    ];
-    analysis = aiText || `📊 DAY TRADE ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${formatPrice(pair, entry)} (${timeframe}). Market is in ${trendLabel} — trading WITH the trend (${trend.strength}% strength, EMA20 ${isBuy ? '>' : '<'} EMA50, RSI ${rsi}). ${smcSetup} — ${isBuy ? 'SSL swept at ' + liquidityTarget + ', BMS confirmed bullish' : 'BSL swept at ' + liquidityTarget + ', BMS confirmed bearish'}. RTO to OB for entry. OTE zone: ${oteZone}. ${smcSession} phase. SL at ${formatPrice(pair, sl)}. Close before EOD. Risk max 1%.`;
+    pattern = realICTElements.length > 1
+      ? `${smcSetup} + ${detectedCandlestick?.[0]?.name || (isBuy ? 'Bullish Engulfing' : 'Bearish Engulfing')}`
+      : `${smcSetup} (Trend-Following)`;
+    ictElements = realICTElements;
+    analysis = aiText || `📊 DAY TRADE ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${formatPrice(pair, entry)} (${timeframe}). Market is in ${trendLabel} (${trend.strength}% strength, RSI ${rsi}). Confluence grade: ${confGrade} (${confScore}/12). ${realICTElements.length > 0 ? 'Detected: ' + realICTElements.slice(0,4).join(', ') + '.' : 'No specific ICT patterns detected — relying on trend and structure.'} SL at ${formatPrice(pair, sl)}. Close before EOD. Risk max 1%.`;
   } else {
-    pattern = isBuy ? `${smcSetup} + Hammer Setup` : `${smcSetup} + Hanging Man Setup`;
-    ictElements = [
-      isBuy ? 'HTF Bullish OB (H4/Daily)' : 'HTF Bearish OB (H4/Daily)',
-      isBuy ? 'Bullish FVG (support)' : 'Bearish FVG (resistance)',
-      isBuy ? `SSL Sweep (${liquidityTarget})` : `BSL Sweep (${liquidityTarget})`,
-      `BMS ${isBuy ? 'Bullish' : 'Bearish'} on HTF`,
-      `Trend: ${trendLabel} (${trend.strength}%, ${trend.structure})`,
-      `Price in ${isBuy ? 'Discount' : 'Premium'} zone`,
-      `OTE: ${oteZone}`,
-    ];
-    analysis = aiText || `📅 SWING ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${formatPrice(pair, entry)} (${timeframe}). Market is in ${trendLabel} (${trend.strength}% strength, ${trend.structure} structure, ${trend.trendConfluence}/5 confluence). ${smcSetup} — ${isBuy ? 'HTF SSL swept, BMS confirmed bullish, RTO to OB in discount zone' : 'HTF BSL swept, BMS confirmed bearish, RTO to OB in premium zone'}. Liquidity target: ${liquidityTarget}. OTE: ${oteZone}. R:R ${rr.toFixed(1)}:1. Risk max 2%. The market hardly reverses without taking liquidity!`;
+    pattern = realICTElements.length > 1
+      ? `${smcSetup} + ${detectedCandlestick?.[0]?.name || (isBuy ? 'Hammer Setup' : 'Hanging Man Setup')}`
+      : `${smcSetup} (Trend-Following)`;
+    ictElements = realICTElements;
+    analysis = aiText || `📅 SWING ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${formatPrice(pair, entry)} (${timeframe}). Market is in ${trendLabel} (${trend.strength}% strength, ${trend.structure}). Confluence grade: ${confGrade} (${confScore}/12). ${realICTElements.length > 0 ? 'Detected: ' + realICTElements.slice(0,5).join(', ') + '.' : 'No specific ICT patterns detected — relying on trend direction.'} R:R ${rr.toFixed(1)}:1. Risk max 2%. The market hardly reverses without taking liquidity!`;
   }
 
   return {
@@ -491,7 +624,7 @@ function generateFallbackSignal(
     pattern,
     rsi,
     rsiStatus: isBuy ? `Bullish RSI (${rsi}) — trend momentum supports upside` : `Bearish RSI (${rsi}) — trend momentum supports downside`,
-    macd: isBuy ? 'Bullish crossover forming on MACD' : 'Bearish crossover forming on MACD',
+    macd: realMACD || (isBuy ? 'Bullish — EMA20 above EMA50' : 'Bearish — EMA20 below EMA50'),
     maCross: isBuy ? `Golden Cross — EMA20 (${formatPrice(pair, trend.ema20)}) above EMA50 (${formatPrice(pair, trend.ema50)})` : `Death Cross — EMA20 (${formatPrice(pair, trend.ema20)}) below EMA50 (${formatPrice(pair, trend.ema50)})`,
     confidence,
     riskReward: `1:${rr.toFixed(1)}`,

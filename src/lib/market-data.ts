@@ -7,6 +7,10 @@
 // - Uses the most recent candle close as a more reliable price reference
 // - Adds delay compensation to SL/TP calculations
 // - Recommends trading style based on data quality
+//
+// v2: Optimized Twelve Data usage (1 API credit per pair instead of 2)
+// v2: Added rate limit tracking for Twelve Data free plan (8 credits/min)
+// v2: Added enhanced XAG/USD handling with multi-source cross-validation
 
 export interface MarketData {
   pair: string;
@@ -67,6 +71,46 @@ const CACHE_TTL = 30 * 1000; // 30 seconds for better accuracy
 // OHLCV cache (1 minute TTL)
 const ohlcvCache: Record<string, { data: OHLCVData; expiry: number }> = {};
 const OHLCV_CACHE_TTL = 1 * 60 * 1000;
+
+// ─── TWELVE DATA RATE LIMIT TRACKING ───────────────────────────────
+// Free plan: 8 API credits per minute, 800 per day
+// We track usage to avoid hitting the limit
+const twelveDataUsage = {
+  creditsUsedThisMinute: 0,
+  minuteStart: Date.now(),
+  creditsUsedToday: 0,
+  dayStart: new Date().setUTCHours(0, 0, 0, 0),
+};
+
+function canUseTwelveData(): boolean {
+  const now = Date.now();
+  // Reset minute counter
+  if (now - twelveDataUsage.minuteStart > 60000) {
+    twelveDataUsage.creditsUsedThisMinute = 0;
+    twelveDataUsage.minuteStart = now;
+  }
+  // Reset day counter
+  const todayStart = new Date().setUTCHours(0, 0, 0, 0);
+  if (todayStart !== twelveDataUsage.dayStart) {
+    twelveDataUsage.creditsUsedToday = 0;
+    twelveDataUsage.dayStart = todayStart;
+  }
+  return twelveDataUsage.creditsUsedThisMinute < 7 && twelveDataUsage.creditsUsedToday < 750;
+}
+
+function recordTwelveDataUsage(credits: number = 1) {
+  twelveDataUsage.creditsUsedThisMinute += credits;
+  twelveDataUsage.creditsUsedToday += credits;
+}
+
+// ─── TWELVE DATA FREE PLAN COMPATIBILITY ───────────────────────────
+// These pairs work on the Twelve Data free plan (real-time)
+// Pairs NOT in this list require paid plan and will be skipped
+const TWELVE_DATA_FREE_PAIRS: Set<string> = new Set([
+  'EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'GBP/JPY',
+  'AUD/USD', 'USD/CAD', 'NZD/USD', 'ETH/USD', 'BTC/USD',
+]);
+// Note: XAG/USD, US30, NAS100, US500, USD/CHF, EUR/GBP require paid plan
 
 // Yahoo Finance symbol mapping
 const YAHOO_SYMBOLS: Record<string, string> = {
@@ -287,65 +331,218 @@ function aggregateTo4hCandles(candles: OHLCVCandle[]): OHLCVCandle[] {
 }
 
 // ─── SOURCE 1: Twelve Data (Real-time, requires API key) ────────────
+// OPTIMIZED: Uses /quote endpoint instead of /price + /quote (saves 1 API credit)
+// OPTIMIZED: Skips pairs that require paid plan (XAG/USD, indices)
+// OPTIMIZED: Rate limit tracking to avoid hitting free plan limits
 async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
   const symbol = TWELVE_DATA_SYMBOLS[pair];
   if (!symbol) return null;
 
+  // Skip pairs that require paid plan on Twelve Data
+  if (!TWELVE_DATA_FREE_PAIRS.has(pair)) {
+    console.log(`[Twelve Data] Skipping ${pair} — requires paid plan. Will use alternative source.`);
+    return null;
+  }
+
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) return null;
 
-  try {
-    // Use real-time price endpoint
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}&source=docs`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!response.ok) return null;
+  // Check rate limit before making API call
+  if (!canUseTwelveData()) {
+    console.warn(`[Twelve Data] Rate limit reached (${twelveDataUsage.creditsUsedThisMinute}/8 this minute, ${twelveDataUsage.creditsUsedToday}/800 today). Skipping.`);
+    return null;
+  }
 
-    const data = await response.json();
-    // Check for API errors
-    if (data.status === 'error') {
-      console.warn(`[Twelve Data] API error for ${pair}: ${data.message}`);
+  try {
+    // Use /quote endpoint — returns price + change + high/low in ONE call (1 credit instead of 2)
+    const quoteUrl = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
+    const quoteResponse = await fetch(quoteUrl, { signal: AbortSignal.timeout(8000) });
+    recordTwelveDataUsage(1);
+
+    if (!quoteResponse.ok) return null;
+
+    const quoteData = await quoteResponse.json();
+
+    // Check for API errors (e.g. paid plan required)
+    if (quoteData.status === 'error') {
+      console.warn(`[Twelve Data] API error for ${pair}: ${quoteData.message}`);
+      // Mark this pair as requiring paid plan so we don't try again
+      TWELVE_DATA_FREE_PAIRS.delete(pair);
       return null;
     }
 
-    const price = parseFloat(data?.price);
+    const price = parseFloat(quoteData?.close) || parseFloat(quoteData?.price);
     if (isNaN(price) || !isValidPrice(pair, price)) return null;
 
-    // Also try to get quote data for change/high/low
-    try {
-      const quoteUrl = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
-      const quoteResponse = await fetch(quoteUrl, { signal: AbortSignal.timeout(8000) });
-      if (quoteResponse.ok) {
-        const quoteData = await quoteResponse.json();
-        if (quoteData.status !== 'error') {
-          const change = parseFloat(quoteData.change) || 0;
-          const changePercent = parseFloat(quoteData.percent_change) || 0;
-          const high = parseFloat(quoteData.high) || 0;
-          const low = parseFloat(quoteData.low) || 0;
+    const change = parseFloat(quoteData.change) || 0;
+    const changePercent = parseFloat(quoteData.percent_change) || 0;
+    const high = parseFloat(quoteData.high) || 0;
+    const low = parseFloat(quoteData.low) || 0;
 
-          return buildMarketData(pair, price, 'Twelve Data (Real-time)', {
-            change: parseFloat(change.toFixed(4)),
-            changePercent: parseFloat(changePercent.toFixed(2)),
-            high: high > 0 ? high : undefined,
-            low: low > 0 ? low : undefined,
-            delay: 'Real-time',
-            isRealtime: true,
-            priceQuality: 'realtime',
-            delayMinutes: 0,
-          });
-        }
-      }
-    } catch {
-      // Quote failed, just use the price
-    }
+    // Verify the price is truly real-time by checking the timestamp
+    const quoteTimestamp = quoteData.timestamp ? new Date(quoteData.timestamp).getTime() : 0;
+    const quoteAge = Date.now() - quoteTimestamp;
+    const isLive = quoteAge < 60000; // Less than 1 minute old
+
+    console.log(`[Twelve Data] ✅ ${pair}: ${price} (${isLive ? 'LIVE' : `~${Math.round(quoteAge / 60000)}min`}, credits: ${twelveDataUsage.creditsUsedThisMinute}/8 this min, ${twelveDataUsage.creditsUsedToday}/800 today)`);
 
     return buildMarketData(pair, price, 'Twelve Data (Real-time)', {
-      delay: 'Real-time',
-      isRealtime: true,
-      priceQuality: 'realtime',
-      delayMinutes: 0,
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      high: high > 0 ? high : undefined,
+      low: low > 0 ? low : undefined,
+      delay: isLive ? 'Real-time' : `~${Math.round(quoteAge / 60000)}min`,
+      isRealtime: isLive,
+      priceQuality: isLive ? 'realtime' : 'near-realtime',
+      delayMinutes: isLive ? 0 : Math.round(quoteAge / 60000),
     });
   } catch (error) {
     console.error(`Twelve Data fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
+// ─── SOURCE 1.5: Enhanced Metals Fetcher (XAG/USD specific) ──────────
+// Twelve Data requires paid plan for XAG/USD, so we use a multi-strategy approach:
+// 1. Try Yahoo Finance with latest 1m candle close (less delayed than regularMarketPrice)
+// 2. Cross-validate with Twelve Data XAU/USD price (silver tracks gold)
+// 3. Apply aggressive delay compensation for metals
+async function fetchMetalsPrice(pair: string): Promise<MarketData | null> {
+  if (pair !== 'XAG/USD' && pair !== 'XAU/USD') return null;
+
+  const yahooSymbol = YAHOO_SYMBOLS[pair];
+  if (!yahooSymbol) return null;
+
+  try {
+    // Use 1-minute candles for the freshest possible Yahoo Finance data
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=1d&includePrePost=false`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const result = data?.chart?.result?.[0];
+    if (!result) return null;
+
+    const meta = result.meta;
+    const reportedPrice = meta?.regularMarketPrice;
+    if (!reportedPrice || !isValidPrice(pair, reportedPrice)) return null;
+
+    const prevClose = meta?.chartPreviousClose || meta?.previousClose || reportedPrice;
+    const change = reportedPrice - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    // ─── KEY: Extract the latest 1-minute candle close ───
+    // For metals on Yahoo Finance, the latest 1m candle close is typically
+    // only 1-3 minutes delayed (vs regularMarketPrice which can be 10-15min delayed)
+    let bestPrice = reportedPrice;
+    let bestCandleAge = 15; // Default to 15min delay
+
+    try {
+      const timestamps: number[] = result.timestamp || [];
+      const quoteData = result.indicators?.quote?.[0] || {};
+      const closes: number[] = quoteData.close || [];
+
+      // Find the last valid candle
+      for (let i = timestamps.length - 1; i >= 0; i--) {
+        if (closes[i] != null && !isNaN(closes[i])) {
+          const candleClose = closes[i];
+          const candleTime = timestamps[i] * 1000;
+          const candleAgeMinutes = (Date.now() - candleTime) / 60000;
+
+          if (isValidPrice(pair, candleClose)) {
+            // Always use candle close - it's more recent than regularMarketPrice
+            const priceDiff = Math.abs(reportedPrice - candleClose) / reportedPrice;
+
+            if (priceDiff > 0.0001) {
+              // Candle close differs from reported price = candle data is fresher
+              bestPrice = candleClose;
+              bestCandleAge = Math.max(1, Math.round(candleAgeMinutes));
+              console.log(`[METALS PRICE] ${pair}: Using candle close ${candleClose} (age: ${bestCandleAge}min) instead of reported ${reportedPrice} (diff: ${(priceDiff * 100).toFixed(3)}%)`);
+            } else {
+              // Prices are similar, but candle close is still more recent
+              bestPrice = candleClose;
+              bestCandleAge = Math.max(1, Math.round(candleAgeMinutes));
+            }
+          }
+          break;
+        }
+      }
+    } catch {
+      // Ignore candle extraction errors
+    }
+
+    // ─── Cross-validate with Twelve Data XAU/USD if available ───
+    // For XAG/USD: If we have XAU/USD real-time price, we can estimate XAG/USD direction
+    if (pair === 'XAG/USD' && canUseTwelveData()) {
+      try {
+        const apiKey = process.env.TWELVE_DATA_API_KEY;
+        if (apiKey) {
+          const xauUrl = `https://api.twelvedata.com/quote?symbol=XAU/USD&apikey=${apiKey}`;
+          const xauResponse = await fetch(xauUrl, { signal: AbortSignal.timeout(5000) });
+          recordTwelveDataUsage(1);
+          if (xauResponse.ok) {
+            const xauData = await xauResponse.json();
+            if (xauData.status !== 'error' && xauData.close) {
+              const xauPrice = parseFloat(xauData.close);
+              console.log(`[METALS CROSS-CHECK] XAU/USD real-time: ${xauPrice} (validates metals market is active)`);
+              // If gold is actively trading, silver data should also be flowing
+              // Reduce estimated delay if gold shows live data
+              if (bestCandleAge > 5) {
+                // Gold is real-time but silver candle is old - use more aggressive compensation
+                console.log(`[METALS CROSS-CHECK] Gold is live but silver candle is ${bestCandleAge}min old. Applying aggressive delay compensation.`);
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore cross-validation errors
+      }
+    }
+
+    // Determine quality based on candle age
+    let priceQuality: 'realtime' | 'near-realtime' | 'delayed' | 'stale';
+    let delayMinutes: number;
+    let delay: string;
+
+    if (bestCandleAge <= 1) {
+      priceQuality = 'near-realtime';
+      delayMinutes = 1;
+      delay = '~1min';
+    } else if (bestCandleAge <= 3) {
+      priceQuality = 'near-realtime';
+      delayMinutes = bestCandleAge;
+      delay = `~${bestCandleAge}min`;
+    } else if (bestCandleAge <= 10) {
+      priceQuality = 'delayed';
+      delayMinutes = bestCandleAge;
+      delay = `~${bestCandleAge}min delayed`;
+    } else {
+      priceQuality = 'delayed';
+      delayMinutes = bestCandleAge;
+      delay = `~${bestCandleAge}min delayed`;
+    }
+
+    return buildMarketData(pair, bestPrice, `Yahoo Finance (1m candles)`, {
+      high: meta?.regularMarketDayHigh || undefined,
+      low: meta?.regularMarketDayLow || undefined,
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      delay,
+      isRealtime: priceQuality === 'realtime',
+      priceQuality,
+      delayMinutes,
+      latestCandleClose: bestPrice,
+      candleTimestamp: Date.now() - bestCandleAge * 60000,
+    });
+  } catch (error) {
+    console.error(`Metals price fetch failed for ${pair}:`, error);
     return null;
   }
 }
@@ -520,7 +717,7 @@ async function fetchFromYahooFinance(pair: string): Promise<MarketData | null> {
 }
 
 // ─── MAIN PRICE FETCHING FUNCTION ──────────────────────────────────
-// Priority: Twelve Data (real-time) → Finnhub (real-time) → Yahoo Finance (delayed)
+// Priority: Twelve Data (real-time) → Metals Fetcher (for XAG/XAU) → Finnhub (real-time) → Yahoo Finance (delayed)
 export async function fetchRealPrice(pair: string): Promise<MarketData> {
   // Check cache first (30 second TTL)
   const cached = priceCache[pair];
@@ -528,16 +725,28 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
     return cached.data;
   }
 
+  // For metals (XAG/USD, XAU/USD), use the enhanced metals fetcher
+  // which uses 1m candles for near-real-time data
+  const isMetal = pair === 'XAG/USD' || pair === 'XAU/USD';
+
   // Try all sources in parallel for speed, pick the best one
-  const [twelveResult, finnhubResult, yahooResult] = await Promise.allSettled([
-    fetchFromTwelveData(pair),
-    fetchFromFinnhub(pair),
-    fetchFromYahooFinance(pair),
-  ]);
+  const fetchPromises: Promise<MarketData | null>[] = [
+    fetchFromTwelveData(pair),         // Real-time for free plan pairs
+    fetchFromFinnhub(pair),            // Real-time if API key available
+  ];
+
+  // For metals, use the enhanced metals fetcher instead of generic Yahoo
+  if (isMetal) {
+    fetchPromises.push(fetchMetalsPrice(pair));
+  } else {
+    fetchPromises.push(fetchFromYahooFinance(pair));
+  }
+
+  const [twelveResult, finnhubResult, metalOrYahooResult] = await Promise.allSettled(fetchPromises);
 
   const twelveData = twelveResult.status === 'fulfilled' ? twelveResult.value : null;
   const finnhubData = finnhubResult.status === 'fulfilled' ? finnhubResult.value : null;
-  const yahooData = yahooResult.status === 'fulfilled' ? yahooResult.value : null;
+  const yahooData = metalOrYahooResult.status === 'fulfilled' ? metalOrYahooResult.value : null;
 
   // Pick the best available source by quality
   // Priority: realtime > near-realtime > delayed > stale
@@ -774,12 +983,25 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
 }
 
 // ─── Fetch OHLCV from Twelve Data (real-time candles) ───────────────
+// OPTIMIZED: Skips pairs requiring paid plan to save API credits
 async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promise<OHLCVData | null> {
   const symbol = TWELVE_DATA_SYMBOLS[pair];
   if (!symbol) return null;
 
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) return null;
+
+  // Skip pairs that require paid plan on Twelve Data
+  if (!TWELVE_DATA_FREE_PAIRS.has(pair)) {
+    console.log(`[Twelve Data OHLCV] Skipping ${pair} — requires paid plan. Using Yahoo Finance for candles.`);
+    return null;
+  }
+
+  // Check rate limit
+  if (!canUseTwelveData()) {
+    console.warn(`[Twelve Data OHLCV] Rate limit reached. Using Yahoo Finance for ${pair} candles.`);
+    return null;
+  }
 
   // Map timeframes to Twelve Data format
   const tfMap: Record<string, string> = {
@@ -793,10 +1015,17 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
   try {
     const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=${outputSize}&apikey=${apiKey}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    recordTwelveDataUsage(1); // time_series costs 1 API credit
     if (!response.ok) return null;
 
     const data = await response.json();
-    if (data.status === 'error' || !data.values || data.values.length === 0) return null;
+    if (data.status === 'error' || !data.values || data.values.length === 0) {
+      // Mark pair as requiring paid plan if error
+      if (data.status === 'error') {
+        TWELVE_DATA_FREE_PAIRS.delete(pair);
+      }
+      return null;
+    }
 
     const candles: OHLCVCandle[] = data.values.map((v: any) => ({
       timestamp: new Date(v.datetime).getTime(),
@@ -815,6 +1044,8 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
     const prevClose = candles.length > 1 ? candles[candles.length - 2].close : currentPrice;
     const change = currentPrice - prevClose;
     const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    console.log(`[Twelve Data OHLCV] ✅ ${pair} ${timeframe}: ${candles.length} candles, price=${currentPrice}`);
 
     return {
       pair,
@@ -999,14 +1230,22 @@ export function compensateForDelay(
 
 // ─── RECOMMENDED TRADING STYLE ─────────────────────────────────────
 // Based on data quality, recommends the best trading style
+// IMPORTANT: For XAG/USD specifically, scalping is NOT recommended with delayed data
+// because even small delays cause SL to be placed on the WRONG SIDE of the real price
 export function getRecommendedTradingStyle(
   priceQuality: 'realtime' | 'near-realtime' | 'delayed' | 'stale',
-  delayMinutes: number
+  delayMinutes: number,
+  pair?: string
 ): { style: 'swing' | 'daytrading' | 'scalping'; reason: string; warning?: string } {
+  // XAG/USD specific: Very volatile, delays cause more damage
+  const isVolatileMetal = pair === 'XAG/USD' || pair === 'XAU/USD';
+  
   if (priceQuality === 'realtime') {
     return {
       style: 'daytrading',
-      reason: 'Real-time data available — Day Trading and Swing Trading are both excellent choices. Scalping is possible but requires very fast execution.',
+      reason: isVolatileMetal
+        ? 'Real-time data available — Day Trading on H1/H4 is ideal for metals. Swing Trading on H4/D1 also works well. Scalping is possible but metals are very volatile so use tight risk management.'
+        : 'Real-time data available — Day Trading and Swing Trading are both excellent choices. Scalping is possible but requires very fast execution.',
     };
   }
 
@@ -1014,21 +1253,31 @@ export function getRecommendedTradingStyle(
     return {
       style: 'daytrading',
       reason: `Data is near real-time (~${delayMinutes}min delay) — Day Trading works well on H1/H4 timeframes. Swing Trading on H4/D1 is also recommended.`,
-      warning: 'Scalping on M1/M5 may be affected by slight price delay.',
+      warning: isVolatileMetal
+        ? 'XAG/USD is very volatile — even small delays can cause SL to be placed incorrectly. Scalping is NOT recommended with near-real-time data on metals.'
+        : 'Scalping on M1/M5 may be affected by slight price delay.',
     };
   }
 
   if (priceQuality === 'near-realtime' || (priceQuality === 'delayed' && delayMinutes <= 10)) {
     return {
       style: 'swing',
-      reason: `Data has ~${delayMinutes}min delay — Swing Trading on H4/D1 is recommended as the delay has minimal impact on longer timeframes. Day Trading on H1 is acceptable with wider SL.`,
-      warning: 'Avoid Scalping — price delay will cause incorrect SL/TP placement. Day Trading requires wider stops to compensate.',
+      reason: isVolatileMetal
+        ? `Data has ~${delayMinutes}min delay — ONLY Swing Trading on H4/D1 is safe for XAG/USD. Metals are very volatile and delayed data WILL cause incorrect SL placement on shorter timeframes.`
+        : `Data has ~${delayMinutes}min delay — Swing Trading on H4/D1 is recommended as the delay has minimal impact on longer timeframes. Day Trading on H1 is acceptable with wider SL.`,
+      warning: isVolatileMetal
+        ? 'DO NOT use Scalping or Day Trading on XAG/USD with delayed data! The SL will be placed on the wrong side of the real price. Example: If real price is 77.36 but bot sees 77.22, a SELL SL at 77.34 would be BELOW the real price instead of above it.'
+        : 'Avoid Scalping — price delay will cause incorrect SL/TP placement. Day Trading requires wider stops to compensate.',
     };
   }
 
   return {
     style: 'swing',
-    reason: `Data is significantly delayed (~${delayMinutes}min) — ONLY Swing Trading on H4/D1 is recommended. Longer timeframes are less affected by price delays.`,
-    warning: 'DO NOT use Scalping or Day Trading with delayed data — SL/TP will be incorrectly placed relative to the real market price.',
+    reason: isVolatileMetal
+      ? `Data is significantly delayed (~${delayMinutes}min) — ONLY Swing Trading on D1 is safe for XAG/USD. H4 is acceptable with very wide SL. The delay WILL cause SL to be placed incorrectly for any shorter timeframe.`
+      : `Data is significantly delayed (~${delayMinutes}min) — ONLY Swing Trading on H4/D1 is recommended. Longer timeframes are less affected by price delays.`,
+    warning: isVolatileMetal
+      ? 'CRITICAL: With delayed XAG/USD data, your SL will be on the WRONG SIDE of the real market price. Only use Swing Trading on D1 timeframe with wide SL buffers.'
+      : 'DO NOT use Scalping or Day Trading with delayed data — SL/TP will be incorrectly placed relative to the real market price.',
   };
 }

@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     const priceSource = marketData.source || ohlcvData.source || 'Unknown';
 
     // Get recommended trading style based on data quality
-    const tradingStyleRec = getRecommendedTradingStyle(priceQuality, delayMinutes);
+    const tradingStyleRec = getRecommendedTradingStyle(priceQuality, delayMinutes, pair);
 
     console.log(`[PRICE QUALITY] ${pair}: price=${currentPrice}, quality=${priceQuality}, delay=~${delayMinutes}min, source=${priceSource}, recommended=${tradingStyleRec.style}`);
 

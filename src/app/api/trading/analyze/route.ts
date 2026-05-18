@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     const delayMinutes = marketData.delayMinutes ?? ohlcvData.delayMinutes ?? 15;
     const isRealtime = priceQuality === 'realtime' || priceQuality === 'near-realtime';
     const priceSource = marketData.source || ohlcvData.source || 'Unknown';
-    const tradingStyleRec = getRecommendedTradingStyle(priceQuality, delayMinutes);
+    const tradingStyleRec = getRecommendedTradingStyle(priceQuality, delayMinutes, pair);
 
     // ─── CRITICAL: Use shared trend analysis engine ────────────────
     const trendAnalysis = analyzeTrend(ohlcvData.candles, currentPrice);

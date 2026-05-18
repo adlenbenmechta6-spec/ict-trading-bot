@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
-import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
+import { fetchRealPrice, fetchOHLCVData, compensateForDelay, getRecommendedTradingStyle } from '@/lib/market-data';
 import { ICT_ANALYSIS_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
 import { SMC_SETUPS } from '@/lib/smc-knowledge';
 import {
@@ -45,16 +45,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const currentPrice = marketData.price || ohlcvData.currentPrice;
-    const dayHigh = marketData.high || ohlcvData.dayHigh;
-    const dayLow = marketData.low || ohlcvData.dayLow;
-    const changePercent = marketData.changePercent || ohlcvData.changePercent;
+    // ─── KEY FIX: Use OHLCV currentPrice as primary (more reliable) ───
+    const currentPrice = ohlcvData.currentPrice || marketData.price;
+    const dayHigh = ohlcvData.dayHigh || marketData.high;
+    const dayLow = ohlcvData.dayLow || marketData.low;
+    const changePercent = ohlcvData.changePercent || marketData.changePercent;
+
+    // ─── PRICE QUALITY ASSESSMENT ────────────────────────────────────
+    const priceQuality = marketData.priceQuality || ohlcvData.priceQuality || 'delayed';
+    const delayMinutes = marketData.delayMinutes ?? ohlcvData.delayMinutes ?? 15;
+    const isRealtime = priceQuality === 'realtime' || priceQuality === 'near-realtime';
+    const priceSource = marketData.source || ohlcvData.source || 'Unknown';
+    const tradingStyleRec = getRecommendedTradingStyle(priceQuality, delayMinutes);
 
     // ─── CRITICAL: Use shared trend analysis engine ────────────────
     const trendAnalysis = analyzeTrend(ohlcvData.candles, currentPrice);
 
     // Mode-specific analysis label
     const modeLabel = mode === 'scalping' ? 'Scalping' : mode === 'daytrading' ? 'Day Trading' : 'Swing Trading';
+
+    // ─── SCALPING WARNING ───
+    const scalpingWarning = mode === 'scalping' && !isRealtime
+      ? `\n\n⚠️ SCALPING WARNING: Price data is ~${delayMinutes}min delayed. For accurate scalping, you need real-time data. Recommended: ${tradingStyleRec.style} trading.`
+      : '';
 
     // ─── CRITICAL: Use shared trend context for AI ─────────────────
     const trendContext = buildTrendContext(trendAnalysis, pair);
@@ -214,6 +227,13 @@ Be concise and professional. Use specific ICT Core Content month references. Res
         })),
         dataSource: ohlcvData.source,
         dataDelay: ohlcvData.delay,
+        // Price quality and delay information
+        priceQuality: priceQuality,
+        delayMinutes: delayMinutes,
+        isRealtime: isRealtime,
+        priceSource: priceSource,
+        recommendedStyle: tradingStyleRec,
+        scalpingWarning: scalpingWarning || null,
         // Include trend analysis data
         trend: {
           direction: trendAnalysis.direction,

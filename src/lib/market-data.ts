@@ -1,9 +1,12 @@
-// Real Market Data Service - Fetches live prices and OHLCV from Yahoo Finance API
+// Real Market Data Service - Multi-source price fetching with delay detection
+// Sources: Twelve Data (real-time) → Finnhub (real-time) → Yahoo Finance (delayed)
 // Supports multiple timeframes: M1, M5, M15, M30, H1, H4, D1
-// Works on Vercel and any public hosting (no internal SDK required)
 //
-// Key fix: H4 candles are now PROPERLY AGGREGATED from 1h candles
-// (Yahoo Finance doesn't have a 4h interval, so we fetch 1h and combine)
+// KEY IMPROVEMENT: Price freshness validation + delay compensation
+// - Compares "current price" with latest candle close to detect delay
+// - Uses the most recent candle close as a more reliable price reference
+// - Adds delay compensation to SL/TP calculations
+// - Recommends trading style based on data quality
 
 export interface MarketData {
   pair: string;
@@ -15,6 +18,11 @@ export interface MarketData {
   timestamp: string;
   source: string;
   delay?: string; // e.g. "~15min delayed"
+  isRealtime?: boolean; // true if price is confirmed real-time
+  priceQuality?: 'realtime' | 'near-realtime' | 'delayed' | 'stale';
+  delayMinutes?: number; // estimated delay in minutes
+  latestCandleClose?: number; // latest candle close for validation
+  candleTimestamp?: number; // timestamp of latest candle
 }
 
 export interface OHLCVCandle {
@@ -37,25 +45,26 @@ export interface OHLCVData {
   changePercent: number;
   source: string;
   delay?: string;
+  priceQuality?: 'realtime' | 'near-realtime' | 'delayed' | 'stale';
+  delayMinutes?: number;
 }
 
 // Yahoo Finance interval mapping for different timeframes
-// H4 uses 1h data that gets aggregated into 4h candles
 const YAHOO_INTERVAL_MAP: Record<string, { interval: string; range: string; aggregateTo?: string }> = {
   'M1':  { interval: '1m',  range: '1d' },
   'M5':  { interval: '5m',  range: '5d' },
   'M15': { interval: '15m', range: '10d' },
   'M30': { interval: '30m', range: '10d' },
   'H1':  { interval: '1h',  range: '30d' },
-  'H4':  { interval: '1h',  range: '60d', aggregateTo: '4h' },  // Fetch 1h, aggregate to 4h
+  'H4':  { interval: '1h',  range: '60d', aggregateTo: '4h' },
   'D1':  { interval: '1d',  range: '6mo' },
 };
 
-// Price cache (1 minute TTL - reduced for better accuracy)
+// Price cache (30 seconds TTL for real-time accuracy)
 const priceCache: Record<string, { data: MarketData; expiry: number }> = {};
-const CACHE_TTL = 1 * 60 * 1000;
+const CACHE_TTL = 30 * 1000; // 30 seconds for better accuracy
 
-// OHLCV cache (1 minute TTL - short for intraday accuracy)
+// OHLCV cache (1 minute TTL)
 const ohlcvCache: Record<string, { data: OHLCVData; expiry: number }> = {};
 const OHLCV_CACHE_TTL = 1 * 60 * 1000;
 
@@ -77,6 +86,43 @@ const YAHOO_SYMBOLS: Record<string, string> = {
   'NZD/USD': 'NZDUSD=X',
   'USD/CHF': 'USDCHF=X',
   'EUR/GBP': 'EURGBP=X',
+};
+
+// Twelve Data symbol mapping
+const TWELVE_DATA_SYMBOLS: Record<string, string> = {
+  'EUR/USD': 'EUR/USD',
+  'GBP/USD': 'GBP/USD',
+  'USD/JPY': 'USD/JPY',
+  'XAU/USD': 'XAU/USD',
+  'XAG/USD': 'XAG/USD',
+  'BTC/USD': 'BTC/USD',
+  'ETH/USD': 'ETH/USD',
+  'US30': 'DJI',
+  'NAS100': 'NDX',
+  'US500': 'SPX',
+  'GBP/JPY': 'GBP/JPY',
+  'AUD/USD': 'AUD/USD',
+  'USD/CAD': 'USD/CAD',
+  'NZD/USD': 'NZD/USD',
+  'USD/CHF': 'USD/CHF',
+  'EUR/GBP': 'EUR/GBP',
+};
+
+// Finnhub symbol mapping for forex
+const FINNHUB_SYMBOLS: Record<string, string> = {
+  'EUR/USD': 'OANDA:EUR_USD',
+  'GBP/USD': 'OANDA:GBP_USD',
+  'USD/JPY': 'OANDA:USD_JPY',
+  'XAU/USD': 'OANDA:XAU_USD',
+  'XAG/USD': 'OANDA:XAG_USD',
+  'BTC/USD': 'BINANCE:BTCUSDT',
+  'ETH/USD': 'BINANCE:ETHUSDT',
+  'GBP/JPY': 'OANDA:GBP_JPY',
+  'AUD/USD': 'OANDA:AUD_USD',
+  'USD/CAD': 'OANDA:USD_CAD',
+  'NZD/USD': 'OANDA:NZD_USD',
+  'USD/CHF': 'OANDA:USD_CHF',
+  'EUR/GBP': 'OANDA:EUR_GBP',
 };
 
 function isValidPrice(pair: string, price: number): boolean {
@@ -123,22 +169,84 @@ function buildMarketData(pair: string, price: number, source: string, extra?: Pa
     timestamp: new Date().toISOString(),
     source,
     delay: extra?.delay,
+    isRealtime: extra?.isRealtime ?? false,
+    priceQuality: extra?.priceQuality ?? 'delayed',
+    delayMinutes: extra?.delayMinutes,
+    latestCandleClose: extra?.latestCandleClose,
+    candleTimestamp: extra?.candleTimestamp,
   };
 }
 
+// ─── PRICE FRESHNESS VALIDATION ─────────────────────────────────────
+// Compares the "current price" with the latest candle close to detect delay
+// Returns quality assessment and estimated delay
+export function assessPriceFreshness(
+  currentPrice: number,
+  latestCandleClose: number | undefined,
+  candleTimestamp: number | undefined,
+  pair: string
+): { quality: 'realtime' | 'near-realtime' | 'delayed' | 'stale'; delayMinutes: number; adjustedPrice: number } {
+  // If we don't have candle data, can't assess freshness
+  if (!latestCandleClose || !candleTimestamp) {
+    return { quality: 'delayed', delayMinutes: 15, adjustedPrice: currentPrice };
+  }
+
+  const now = Date.now();
+  const candleAge = now - candleTimestamp; // ms since last candle
+  const candleAgeMinutes = candleAge / 60000;
+
+  // Calculate price discrepancy
+  const priceDiff = Math.abs(currentPrice - latestCandleClose);
+  const priceDiffPct = priceDiff / currentPrice;
+
+  // For instruments like XAG/USD, even 0.1% difference can mean significant delay
+  const isMetal = pair === 'XAU/USD' || pair === 'XAG/USD';
+  const isCrypto = pair.startsWith('BTC') || pair.startsWith('ETH');
+  const significantDiffPct = isMetal ? 0.002 : isCrypto ? 0.005 : 0.001;
+
+  // Determine quality based on candle age and price discrepancy
+  let quality: 'realtime' | 'near-realtime' | 'delayed' | 'stale';
+  let delayMinutes: number;
+
+  if (candleAgeMinutes < 2 && priceDiffPct < significantDiffPct) {
+    quality = 'realtime';
+    delayMinutes = 0;
+  } else if (candleAgeMinutes < 5 && priceDiffPct < significantDiffPct * 2) {
+    quality = 'near-realtime';
+    delayMinutes = Math.round(candleAgeMinutes);
+  } else if (candleAgeMinutes < 20 && priceDiffPct < significantDiffPct * 5) {
+    quality = 'delayed';
+    delayMinutes = Math.round(candleAgeMinutes);
+  } else {
+    quality = 'stale';
+    delayMinutes = Math.round(candleAgeMinutes);
+  }
+
+  // If there's a significant discrepancy, use the latest candle close
+  // as it's typically more recent than the "regularMarketPrice"
+  let adjustedPrice = currentPrice;
+  if (priceDiffPct > significantDiffPct && latestCandleClose > 0) {
+    // The candle close is likely more recent — use it
+    // But only if it's within a reasonable range
+    if (isValidPrice(pair, latestCandleClose)) {
+      adjustedPrice = latestCandleClose;
+      console.log(`[PRICE FRESHNESS] Using candle close ${latestCandleClose} instead of ${currentPrice} for ${pair} (diff: ${(priceDiffPct * 100).toFixed(3)}%)`);
+    }
+  }
+
+  return { quality, delayMinutes, adjustedPrice };
+}
+
 // ─── Aggregate 1h candles into 4h candles ─────────────────────────────
-// Forex 4h candles align to: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
 function aggregateTo4hCandles(candles: OHLCVCandle[]): OHLCVCandle[] {
   if (candles.length === 0) return [];
 
-  // Group candles by their 4-hour block
   const groups: Map<number, OHLCVCandle[]> = new Map();
 
   for (const candle of candles) {
     const date = new Date(candle.timestamp);
     const hourUTC = date.getUTCHours();
-    // Determine which 4-hour block this candle belongs to
-    const blockHour = Math.floor(hourUTC / 4) * 4; // 0, 4, 8, 12, 16, 20
+    const blockHour = Math.floor(hourUTC / 4) * 4;
     const blockDate = new Date(Date.UTC(
       date.getUTCFullYear(),
       date.getUTCMonth(),
@@ -154,7 +262,6 @@ function aggregateTo4hCandles(candles: OHLCVCandle[]): OHLCVCandle[] {
     groups.get(blockKey)!.push(candle);
   }
 
-  // Aggregate each group into a single 4h candle
   const result: OHLCVCandle[] = [];
   const sortedKeys = Array.from(groups.keys()).sort((a, b) => a - b);
 
@@ -162,22 +269,340 @@ function aggregateTo4hCandles(candles: OHLCVCandle[]): OHLCVCandle[] {
     const group = groups.get(key)!;
     if (group.length === 0) continue;
 
-    // Sort group by timestamp
     group.sort((a, b) => a.timestamp - b.timestamp);
 
     const aggregated: OHLCVCandle = {
-      timestamp: key, // Start of the 4h block
-      open: group[0].open,              // First candle's open
-      high: Math.max(...group.map(c => c.high)),   // Highest high
-      low: Math.min(...group.map(c => c.low)),     // Lowest low
-      close: group[group.length - 1].close,         // Last candle's close
-      volume: group.reduce((sum, c) => sum + (c.volume || 0), 0), // Sum of volumes
+      timestamp: key,
+      open: group[0].open,
+      high: Math.max(...group.map(c => c.high)),
+      low: Math.min(...group.map(c => c.low)),
+      close: group[group.length - 1].close,
+      volume: group.reduce((sum, c) => sum + (c.volume || 0), 0),
     };
 
     result.push(aggregated);
   }
 
   return result;
+}
+
+// ─── SOURCE 1: Twelve Data (Real-time, requires API key) ────────────
+async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
+  const symbol = TWELVE_DATA_SYMBOLS[pair];
+  if (!symbol) return null;
+
+  const apiKey = process.env.TWELVE_DATA_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    // Use real-time price endpoint
+    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}&source=docs`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    // Check for API errors
+    if (data.status === 'error') {
+      console.warn(`[Twelve Data] API error for ${pair}: ${data.message}`);
+      return null;
+    }
+
+    const price = parseFloat(data?.price);
+    if (isNaN(price) || !isValidPrice(pair, price)) return null;
+
+    // Also try to get quote data for change/high/low
+    try {
+      const quoteUrl = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
+      const quoteResponse = await fetch(quoteUrl, { signal: AbortSignal.timeout(8000) });
+      if (quoteResponse.ok) {
+        const quoteData = await quoteResponse.json();
+        if (quoteData.status !== 'error') {
+          const change = parseFloat(quoteData.change) || 0;
+          const changePercent = parseFloat(quoteData.percent_change) || 0;
+          const high = parseFloat(quoteData.high) || 0;
+          const low = parseFloat(quoteData.low) || 0;
+
+          return buildMarketData(pair, price, 'Twelve Data (Real-time)', {
+            change: parseFloat(change.toFixed(4)),
+            changePercent: parseFloat(changePercent.toFixed(2)),
+            high: high > 0 ? high : undefined,
+            low: low > 0 ? low : undefined,
+            delay: 'Real-time',
+            isRealtime: true,
+            priceQuality: 'realtime',
+            delayMinutes: 0,
+          });
+        }
+      }
+    } catch {
+      // Quote failed, just use the price
+    }
+
+    return buildMarketData(pair, price, 'Twelve Data (Real-time)', {
+      delay: 'Real-time',
+      isRealtime: true,
+      priceQuality: 'realtime',
+      delayMinutes: 0,
+    });
+  } catch (error) {
+    console.error(`Twelve Data fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
+// ─── SOURCE 2: Finnhub (Real-time forex/crypto, requires API key) ───
+async function fetchFromFinnhub(pair: string): Promise<MarketData | null> {
+  const symbol = FINNHUB_SYMBOLS[pair];
+  if (!symbol) return null;
+
+  const apiKey = process.env.FINNHUB_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    // Finnhub forex/crypto price endpoint
+    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    // Finnhub returns: { c: currentPrice, h: high, l: low, o: open, pc: prevClose, t: timestamp }
+    const price = data?.c;
+    if (!price || isNaN(price) || !isValidPrice(pair, price)) return null;
+
+    const prevClose = data?.pc || price;
+    const change = price - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    // Check if the quote timestamp is recent (within 5 minutes)
+    const quoteTimestamp = data?.t ? data.t * 1000 : 0;
+    const quoteAge = Date.now() - quoteTimestamp;
+    const isRecent = quoteAge < 5 * 60 * 1000;
+
+    return buildMarketData(pair, price, 'Finnhub (Real-time)', {
+      high: data?.h || undefined,
+      low: data?.l || undefined,
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      delay: isRecent ? 'Real-time' : '~1min',
+      isRealtime: isRecent,
+      priceQuality: isRecent ? 'realtime' : 'near-realtime',
+      delayMinutes: isRecent ? 0 : 1,
+    });
+  } catch (error) {
+    console.error(`Finnhub fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
+// ─── SOURCE 3: Yahoo Finance (Delayed, free, no API key) ────────────
+async function fetchFromYahooFinance(pair: string): Promise<MarketData | null> {
+  const yahooSymbol = YAHOO_SYMBOLS[pair];
+  if (!yahooSymbol) return null;
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=1d&includePrePost=false`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      console.error(`Yahoo Finance returned ${response.status} for ${pair}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const result = data?.chart?.result?.[0];
+    if (!result) return null;
+
+    const meta = result.meta;
+    const reportedPrice = meta?.regularMarketPrice;
+    if (!reportedPrice || !isValidPrice(pair, reportedPrice)) return null;
+
+    const prevClose = meta?.chartPreviousClose || meta?.previousClose || reportedPrice;
+    const change = reportedPrice - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    // ─── KEY IMPROVEMENT: Extract latest candle close for validation ───
+    // The latest 1-minute candle close is typically MORE accurate than
+    // regularMarketPrice for forex/commodities
+    let latestCandleClose: number | undefined;
+    let candleTimestamp: number | undefined;
+
+    try {
+      const timestamps: number[] = result.timestamp || [];
+      const quoteData = result.indicators?.quote?.[0] || {};
+      const closes: number[] = quoteData.close || [];
+
+      // Find the last valid candle
+      for (let i = timestamps.length - 1; i >= 0; i--) {
+        if (closes[i] != null && !isNaN(closes[i])) {
+          latestCandleClose = closes[i];
+          candleTimestamp = timestamps[i] * 1000; // Convert to ms
+          break;
+        }
+      }
+    } catch {
+      // Ignore candle extraction errors
+    }
+
+    // Determine delay
+    const marketState = meta?.marketState;
+    let delay = '~15min delayed';
+    let delayMinutes = 15;
+    let priceQuality: 'realtime' | 'near-realtime' | 'delayed' | 'stale' = 'delayed';
+
+    if (marketState === 'REGULAR') {
+      // Even "REGULAR" for forex on Yahoo has some delay
+      // Check if we have recent candle data to validate
+      if (candleTimestamp) {
+        const candleAge = (Date.now() - candleTimestamp) / 60000;
+        if (candleAge < 2) {
+          delay = '~1min';
+          delayMinutes = 1;
+          priceQuality = 'near-realtime';
+        } else if (candleAge < 5) {
+          delay = `~${Math.round(candleAge)}min`;
+          delayMinutes = Math.round(candleAge);
+          priceQuality = 'near-realtime';
+        } else {
+          delay = `~${Math.round(candleAge)}min delayed`;
+          delayMinutes = Math.round(candleAge);
+          priceQuality = 'delayed';
+        }
+      } else {
+        delay = '~15min delayed';
+        delayMinutes = 15;
+        priceQuality = 'delayed';
+      }
+    } else if (marketState === 'CLOSED') {
+      delay = 'Market Closed';
+      delayMinutes = 999;
+      priceQuality = 'stale';
+    } else if (marketState === 'PRE' || marketState === 'POST') {
+      delay = '~15min delayed';
+      delayMinutes = 15;
+      priceQuality = 'delayed';
+    }
+
+    // ─── KEY FIX: Use latest candle close if it's more recent ───
+    // Yahoo's regularMarketPrice can be stale even during "REGULAR" market
+    let bestPrice = reportedPrice;
+    if (latestCandleClose && candleTimestamp) {
+      const freshness = assessPriceFreshness(reportedPrice, latestCandleClose, candleTimestamp, pair);
+      bestPrice = freshness.adjustedPrice;
+      // Update quality if candle-based assessment is better
+      if (freshness.quality === 'near-realtime' || freshness.quality === 'realtime') {
+        priceQuality = freshness.quality;
+        delayMinutes = freshness.delayMinutes;
+      }
+    }
+
+    return buildMarketData(pair, bestPrice, 'Yahoo Finance', {
+      high: meta?.regularMarketDayHigh || undefined,
+      low: meta?.regularMarketDayLow || undefined,
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      delay,
+      isRealtime: priceQuality === 'realtime',
+      priceQuality,
+      delayMinutes,
+      latestCandleClose,
+      candleTimestamp,
+    });
+  } catch (error) {
+    console.error(`Yahoo Finance fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
+// ─── MAIN PRICE FETCHING FUNCTION ──────────────────────────────────
+// Priority: Twelve Data (real-time) → Finnhub (real-time) → Yahoo Finance (delayed)
+export async function fetchRealPrice(pair: string): Promise<MarketData> {
+  // Check cache first (30 second TTL)
+  const cached = priceCache[pair];
+  if (cached && Date.now() < cached.expiry) {
+    return cached.data;
+  }
+
+  // Try all sources in parallel for speed, pick the best one
+  const [twelveResult, finnhubResult, yahooResult] = await Promise.allSettled([
+    fetchFromTwelveData(pair),
+    fetchFromFinnhub(pair),
+    fetchFromYahooFinance(pair),
+  ]);
+
+  const twelveData = twelveResult.status === 'fulfilled' ? twelveResult.value : null;
+  const finnhubData = finnhubResult.status === 'fulfilled' ? finnhubResult.value : null;
+  const yahooData = yahooResult.status === 'fulfilled' ? yahooResult.value : null;
+
+  // Pick the best available source by quality
+  // Priority: realtime > near-realtime > delayed > stale
+  const qualityOrder = { 'realtime': 0, 'near-realtime': 1, 'delayed': 2, 'stale': 3 };
+
+  const candidates = [twelveData, finnhubData, yahooData].filter(Boolean) as MarketData[];
+  candidates.sort((a, b) => (qualityOrder[a.priceQuality || 'delayed']) - (qualityOrder[b.priceQuality || 'delayed']));
+
+  const bestData = candidates[0];
+
+  if (bestData) {
+    // ─── KEY FIX: Cross-validate price against other sources ───
+    // If we have multiple sources, use the highest quality one
+    // but also check for major discrepancies
+    if (candidates.length >= 2) {
+      const prices = candidates.map(c => c.price);
+      const maxPrice = Math.max(...prices);
+      const minPrice = Math.min(...prices);
+      const maxDiffPct = (maxPrice - minPrice) / minPrice;
+
+      // If sources disagree by more than 1%, something is wrong
+      if (maxDiffPct > 0.01) {
+        console.warn(`[PRICE VALIDATION] Major discrepancy between sources for ${pair}: ${prices.join(', ')}. Using best quality source.`);
+      }
+
+      // If the best source is delayed but we have a more recent candle close from another source,
+      // use that for the price
+      if (bestData.priceQuality !== 'realtime') {
+        for (const candidate of candidates) {
+          if (candidate.latestCandleClose && candidate.candleTimestamp) {
+            const candleAge = (Date.now() - candidate.candleTimestamp) / 60000;
+            if (candleAge < (bestData.delayMinutes || 15) && isValidPrice(pair, candidate.latestCandleClose)) {
+              // This candle is more recent than our best price
+              const freshness = assessPriceFreshness(bestData.price, candidate.latestCandleClose, candidate.candleTimestamp, pair);
+              if (freshness.adjustedPrice !== bestData.price) {
+                console.log(`[PRICE CORRECTION] Using fresher candle close ${candidate.latestCandleClose} from ${candidate.source} instead of ${bestData.price} from ${bestData.source}`);
+                bestData.price = freshness.adjustedPrice;
+                bestData.priceQuality = freshness.quality;
+                bestData.delayMinutes = freshness.delayMinutes;
+                bestData.delay = freshness.quality === 'realtime' ? 'Real-time' : freshness.quality === 'near-realtime' ? `~${freshness.delayMinutes}min` : `~${freshness.delayMinutes}min delayed`;
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    priceCache[pair] = { data: bestData, expiry: Date.now() + CACHE_TTL };
+    return bestData;
+  }
+
+  // Fallback: return unavailable
+  return {
+    pair,
+    price: 0,
+    change: 0,
+    changePercent: 0,
+    high: 0,
+    low: 0,
+    timestamp: new Date().toISOString(),
+    source: 'unavailable',
+    priceQuality: 'stale',
+    delayMinutes: 999,
+  };
 }
 
 // ─── Fetch OHLCV Data for specific timeframe ──────────────────────────
@@ -188,6 +613,14 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
     return cached.data;
   }
 
+  // Try Twelve Data first for real-time OHLCV (if API key available)
+  const twelveOHLCV = await fetchOHLCVFromTwelveData(pair, timeframe);
+  if (twelveOHLCV) {
+    ohlcvCache[cacheKey] = { data: twelveOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
+    return twelveOHLCV;
+  }
+
+  // Fallback to Yahoo Finance
   const yahooSymbol = YAHOO_SYMBOLS[pair];
   if (!yahooSymbol) {
     return getFallbackOHLCV(pair, timeframe);
@@ -196,7 +629,6 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
   const intervalConfig = YAHOO_INTERVAL_MAP[timeframe] || YAHOO_INTERVAL_MAP['H4'];
 
   try {
-    // Use v8 chart API with includePrePost=false for cleaner data
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=${intervalConfig.interval}&range=${intervalConfig.range}&includePrePost=false`;
     const response = await fetch(url, {
       headers: {
@@ -216,7 +648,6 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
     if (!result) return getFallbackOHLCV(pair, timeframe);
 
     const meta = result.meta;
-    // Timestamps are in result.timestamp, NOT in indicators.quote[0].timestamp
     const timestamps: number[] = result.timestamp || [];
     const quoteData = result.indicators?.quote?.[0] || {};
     const opens: number[] = quoteData.open || [];
@@ -225,8 +656,8 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
     const closes: number[] = quoteData.close || [];
     const volumes: number[] = quoteData.volume || [];
 
-    const currentPrice = meta?.regularMarketPrice;
-    if (!currentPrice || !isValidPrice(pair, currentPrice)) {
+    const reportedPrice = meta?.regularMarketPrice;
+    if (!reportedPrice || !isValidPrice(pair, reportedPrice)) {
       return getFallbackOHLCV(pair, timeframe);
     }
 
@@ -238,10 +669,9 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
       const l = lows[i];
       const c = closes[i];
       const v = volumes[i];
-      // Skip null/undefined values
       if (o == null || h == null || l == null || c == null) continue;
       candles.push({
-        timestamp: timestamps[i] * 1000, // Convert to milliseconds
+        timestamp: timestamps[i] * 1000,
         open: o,
         high: h,
         low: l,
@@ -250,21 +680,70 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
       });
     }
 
-    // ─── KEY FIX: Aggregate 1h candles into 4h candles for H4 timeframe ───
+    // Aggregate 1h candles into 4h candles for H4 timeframe
     if (intervalConfig.aggregateTo === '4h' && candles.length > 0) {
       candles = aggregateTo4hCandles(candles);
       console.log(`[Market Data] Aggregated ${candles.length} 4h candles for ${pair} H4`);
     }
 
-    // Determine data delay
-    const marketState = meta?.marketState; // "REGULAR", "CLOSED", "PRE", "POST"
-    let delay = '~15min';
-    if (marketState === 'REGULAR') {
-      delay = 'Real-time';
+    // ─── KEY FIX: Use latest candle close instead of regularMarketPrice ───
+    // The regularMarketPrice can be significantly delayed
+    // The latest candle close is always more recent
+    let currentPrice = reportedPrice;
+    let priceQuality: 'realtime' | 'near-realtime' | 'delayed' | 'stale' = 'delayed';
+    let delayMinutes = 15;
+
+    if (candles.length > 0) {
+      const lastCandle = candles[candles.length - 1];
+      const lastCandleClose = lastCandle.close;
+      const lastCandleTime = lastCandle.timestamp;
+      const candleAgeMinutes = (Date.now() - lastCandleTime) / 60000;
+
+      // If the last candle close differs from regularMarketPrice,
+      // the candle data is likely more recent
+      const priceDiff = Math.abs(reportedPrice - lastCandleClose);
+      const priceDiffPct = priceDiff / reportedPrice;
+
+      // Use candle close if:
+      // 1. It's different from regularMarketPrice (meaning candle data is fresher)
+      // 2. The candle is recent (within the timeframe's expected interval)
+      const maxCandleAge = timeframe === 'M1' ? 2 : timeframe === 'M5' ? 6 : timeframe === 'M15' ? 16 : timeframe === 'H1' ? 65 : timeframe === 'H4' ? 250 : 1445;
+
+      if (isValidPrice(pair, lastCandleClose) && candleAgeMinutes < maxCandleAge) {
+        if (priceDiffPct > 0.0001) {
+          // Candle close is different from reported price - candle data is fresher
+          currentPrice = lastCandleClose;
+          console.log(`[OHLCV PRICE FIX] Using last candle close ${lastCandleClose} instead of reported price ${reportedPrice} for ${pair} (candle age: ${candleAgeMinutes.toFixed(1)}min)`);
+        }
+
+        // Assess quality based on candle age
+        if (candleAgeMinutes < 2) {
+          priceQuality = 'near-realtime';
+          delayMinutes = Math.max(1, Math.round(candleAgeMinutes));
+        } else if (candleAgeMinutes < 10) {
+          priceQuality = 'near-realtime';
+          delayMinutes = Math.round(candleAgeMinutes);
+        } else {
+          priceQuality = 'delayed';
+          delayMinutes = Math.round(candleAgeMinutes);
+        }
+      }
+    }
+
+    // Determine data delay label
+    const marketState = meta?.marketState;
+    let delay = `~${delayMinutes}min`;
+    if (marketState === 'REGULAR' && priceQuality === 'near-realtime') {
+      delay = `~${delayMinutes}min`;
+    } else if (marketState === 'REGULAR') {
+      delay = `~${delayMinutes}min delayed`;
     } else if (marketState === 'CLOSED') {
       delay = 'Market Closed';
+      priceQuality = 'stale';
+      delayMinutes = 999;
     } else if (marketState === 'PRE' || marketState === 'POST') {
       delay = '~15min delayed';
+      delayMinutes = 15;
     }
 
     const prevClose = meta?.chartPreviousClose || meta?.previousClose || currentPrice;
@@ -280,8 +759,10 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
       dayLow: meta?.regularMarketDayLow || (candles.length > 0 ? Math.min(...candles.map(c => c.low)) : currentPrice),
       change: parseFloat(change.toFixed(4)),
       changePercent: parseFloat(changePercent.toFixed(2)),
-      source: intervalConfig.aggregateTo ? `Yahoo Finance (1h→4h aggregated)` : 'Yahoo Finance',
+      source: intervalConfig.aggregateTo ? `Yahoo Finance (1h->4h aggregated)` : 'Yahoo Finance',
       delay,
+      priceQuality,
+      delayMinutes,
     };
 
     ohlcvCache[cacheKey] = { data: ohlcvData, expiry: Date.now() + OHLCV_CACHE_TTL };
@@ -292,12 +773,74 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
   }
 }
 
+// ─── Fetch OHLCV from Twelve Data (real-time candles) ───────────────
+async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promise<OHLCVData | null> {
+  const symbol = TWELVE_DATA_SYMBOLS[pair];
+  if (!symbol) return null;
+
+  const apiKey = process.env.TWELVE_DATA_API_KEY;
+  if (!apiKey) return null;
+
+  // Map timeframes to Twelve Data format
+  const tfMap: Record<string, string> = {
+    'M1': '1min', 'M5': '5min', 'M15': '15min', 'M30': '30min',
+    'H1': '1h', 'H4': '4h', 'D1': '1day',
+  };
+
+  const interval = tfMap[timeframe] || '4h';
+  const outputSize = 60; // Number of candles
+
+  try {
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=${outputSize}&apikey=${apiKey}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data.status === 'error' || !data.values || data.values.length === 0) return null;
+
+    const candles: OHLCVCandle[] = data.values.map((v: any) => ({
+      timestamp: new Date(v.datetime).getTime(),
+      open: parseFloat(v.open),
+      high: parseFloat(v.high),
+      low: parseFloat(v.low),
+      close: parseFloat(v.close),
+      volume: parseInt(v.volume) || 0,
+    })).reverse(); // Twelve Data returns newest first
+
+    if (candles.length === 0) return null;
+
+    const currentPrice = candles[candles.length - 1].close;
+    if (!isValidPrice(pair, currentPrice)) return null;
+
+    const prevClose = candles.length > 1 ? candles[candles.length - 2].close : currentPrice;
+    const change = currentPrice - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    return {
+      pair,
+      timeframe,
+      candles,
+      currentPrice,
+      dayHigh: Math.max(...candles.slice(-24).map(c => c.high)),
+      dayLow: Math.min(...candles.slice(-24).map(c => c.low)),
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      source: 'Twelve Data (Real-time)',
+      delay: 'Real-time',
+      priceQuality: 'realtime',
+      delayMinutes: 0,
+    };
+  } catch (error) {
+    console.error(`Twelve Data OHLCV fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
 // Generate fallback OHLCV data when API fails
 function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
-  // Use realistic base prices
   const basePrices: Record<string, number> = {
     'EUR/USD': 1.08500, 'GBP/USD': 1.27200, 'USD/JPY': 155.50,
-    'XAU/USD': 3350.00, 'XAG/USD': 75.00, 'BTC/USD': 95000, 'ETH/USD': 3500,
+    'XAU/USD': 3350.00, 'XAG/USD': 77.00, 'BTC/USD': 95000, 'ETH/USD': 3500,
     'US30': 42000, 'NAS100': 19500, 'US500': 5600,
     'GBP/JPY': 197.80, 'AUD/USD': 0.64500,
   };
@@ -310,7 +853,6 @@ function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
   };
   const volatility = volMap[pair] || 0.006;
 
-  // Adjust candle count and range based on timeframe
   const tfConfig: Record<string, { candles: number; candleVol: number }> = {
     'M1':  { candles: 60,  candleVol: 0.15 },
     'M5':  { candles: 48,  candleVol: 0.25 },
@@ -352,7 +894,6 @@ function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
     price = close;
   }
 
-  // Ensure last candle close matches current price
   if (candles.length > 0) {
     const diff = currentPrice - candles[candles.length - 1].close;
     candles[candles.length - 1].close = currentPrice;
@@ -375,140 +916,8 @@ function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
     changePercent: 0,
     source: 'Fallback (simulated)',
     delay: 'Simulated data',
-  };
-}
-
-async function fetchFromYahooFinance(pair: string): Promise<MarketData | null> {
-  const yahooSymbol = YAHOO_SYMBOLS[pair];
-  if (!yahooSymbol) return null;
-
-  try {
-    // Use shorter interval for more accurate current price
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=1d&includePrePost=false`;
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      console.error(`Yahoo Finance returned ${response.status} for ${pair}`);
-      return null;
-    }
-
-    const data = await response.json();
-    const result = data?.chart?.result?.[0];
-    if (!result) return null;
-
-    const meta = result.meta;
-    const price = meta?.regularMarketPrice;
-    if (!price || !isValidPrice(pair, price)) return null;
-
-    const prevClose = meta?.chartPreviousClose || meta?.previousClose || price;
-    const change = price - prevClose;
-    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-
-    // Determine delay
-    const marketState = meta?.marketState;
-    let delay = '~15min';
-    if (marketState === 'REGULAR') {
-      delay = 'Real-time';
-    } else if (marketState === 'CLOSED') {
-      delay = 'Market Closed';
-    } else if (marketState === 'PRE' || marketState === 'POST') {
-      delay = '~15min delayed';
-    }
-
-    return buildMarketData(pair, price, 'Yahoo Finance', {
-      high: meta?.regularMarketDayHigh || undefined,
-      low: meta?.regularMarketDayLow || undefined,
-      change: parseFloat(change.toFixed(4)),
-      changePercent: parseFloat(changePercent.toFixed(2)),
-      delay,
-    });
-  } catch (error) {
-    console.error(`Yahoo Finance fetch failed for ${pair}:`, error);
-    return null;
-  }
-}
-
-// Fallback: Try Twelve Data API (free tier - 800 req/day)
-async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
-  const twelveSymbolMap: Record<string, string> = {
-    'EUR/USD': 'EUR/USD',
-    'GBP/USD': 'GBP/USD',
-    'USD/JPY': 'USD/JPY',
-    'XAU/USD': 'XAU/USD',
-    'XAG/USD': 'XAG/USD',
-    'BTC/USD': 'BTC/USD',
-    'ETH/USD': 'ETH/USD',
-    'US30': 'US30',
-    'NAS100': 'NAS100',
-    'US500': 'US500',
-    'GBP/JPY': 'GBP/JPY',
-    'AUD/USD': 'AUD/USD',
-    'USD/CAD': 'USD/CAD',
-    'NZD/USD': 'NZD/USD',
-    'USD/CHF': 'USD/CHF',
-    'EUR/GBP': 'EUR/GBP',
-  };
-
-  const symbol = twelveSymbolMap[pair];
-  if (!symbol) return null;
-
-  // Only use if user has a Twelve Data API key
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    const price = parseFloat(data?.price);
-    if (isNaN(price) || !isValidPrice(pair, price)) return null;
-
-    return buildMarketData(pair, price, 'Twelve Data', { delay: 'Real-time' });
-  } catch (error) {
-    console.error(`Twelve Data fetch failed for ${pair}:`, error);
-    return null;
-  }
-}
-
-export async function fetchRealPrice(pair: string): Promise<MarketData> {
-  // Check cache first
-  const cached = priceCache[pair];
-  if (cached && Date.now() < cached.expiry) {
-    return cached.data;
-  }
-
-  // Strategy 1: Yahoo Finance (free, no API key needed)
-  const yahooData = await fetchFromYahooFinance(pair);
-  if (yahooData) {
-    priceCache[pair] = { data: yahooData, expiry: Date.now() + CACHE_TTL };
-    return yahooData;
-  }
-
-  // Strategy 2: Twelve Data (requires API key)
-  const twelveData = await fetchFromTwelveData(pair);
-  if (twelveData) {
-    priceCache[pair] = { data: twelveData, expiry: Date.now() + CACHE_TTL };
-    return twelveData;
-  }
-
-  // Fallback: return unavailable
-  return {
-    pair,
-    price: 0,
-    change: 0,
-    changePercent: 0,
-    high: 0,
-    low: 0,
-    timestamp: new Date().toISOString(),
-    source: 'unavailable',
+    priceQuality: 'stale',
+    delayMinutes: 999,
   };
 }
 
@@ -516,7 +925,6 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
 export async function fetchMultiplePrices(pairs: string[]): Promise<Record<string, MarketData>> {
   const results: Record<string, MarketData> = {};
 
-  // Process in batches of 3 to avoid rate limiting
   for (let i = 0; i < pairs.length; i += 3) {
     const batch = pairs.slice(i, i + 3);
     const promises = batch.map(pair => fetchRealPrice(pair).then(data => ({ pair, data })));
@@ -528,11 +936,99 @@ export async function fetchMultiplePrices(pairs: string[]): Promise<Record<strin
       }
     }
 
-    // Small delay between batches to avoid rate limiting
     if (i + 3 < pairs.length) {
       await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
 
   return results;
+}
+
+// ─── DELAY COMPENSATION FOR SL/TP ──────────────────────────────────
+// When price is delayed, adds a buffer to SL to account for price movement
+// This prevents the bug where SL ends up on the wrong side of the real price
+export function compensateForDelay(
+  entry: number,
+  sl: number,
+  tp1: number,
+  tp2: number,
+  isBuy: boolean,
+  delayMinutes: number,
+  pair: string
+): { sl: number; tp1: number; tp2: number; buffer: number } {
+  if (delayMinutes <= 1) {
+    return { sl, tp1, tp2, buffer: 0 }; // No compensation needed
+  }
+
+  // Calculate the expected price movement during the delay period
+  // Use volatility-based estimation
+  const volMap: Record<string, number> = {
+    'XAU/USD': 0.008, 'XAG/USD': 0.012, 'BTC/USD': 0.03, 'ETH/USD': 0.035,
+    'EUR/USD': 0.005, 'GBP/USD': 0.006, 'USD/JPY': 0.006,
+    'US30': 0.008, 'NAS100': 0.012, 'US500': 0.008,
+  };
+  const dailyVol = volMap[pair] || 0.006;
+
+  // Expected movement in delayMinutes (simplified: sqrt of time ratio)
+  const timeRatio = delayMinutes / (24 * 60); // fraction of day
+  const expectedMove = entry * dailyVol * Math.sqrt(timeRatio);
+
+  // Buffer = expected move * safety factor (1.5x to be safe)
+  const buffer = expectedMove * 1.5;
+
+  const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+
+  if (isBuy) {
+    // For BUY: Move SL further below (add buffer to downside)
+    return {
+      sl: parseFloat((sl - buffer).toFixed(decimals)),
+      tp1,
+      tp2,
+      buffer: parseFloat(buffer.toFixed(decimals)),
+    };
+  } else {
+    // For SELL: Move SL further above (add buffer to upside)
+    return {
+      sl: parseFloat((sl + buffer).toFixed(decimals)),
+      tp1,
+      tp2,
+      buffer: parseFloat(buffer.toFixed(decimals)),
+    };
+  }
+}
+
+// ─── RECOMMENDED TRADING STYLE ─────────────────────────────────────
+// Based on data quality, recommends the best trading style
+export function getRecommendedTradingStyle(
+  priceQuality: 'realtime' | 'near-realtime' | 'delayed' | 'stale',
+  delayMinutes: number
+): { style: 'swing' | 'daytrading' | 'scalping'; reason: string; warning?: string } {
+  if (priceQuality === 'realtime') {
+    return {
+      style: 'daytrading',
+      reason: 'Real-time data available — Day Trading and Swing Trading are both excellent choices. Scalping is possible but requires very fast execution.',
+    };
+  }
+
+  if (priceQuality === 'near-realtime' && delayMinutes <= 3) {
+    return {
+      style: 'daytrading',
+      reason: `Data is near real-time (~${delayMinutes}min delay) — Day Trading works well on H1/H4 timeframes. Swing Trading on H4/D1 is also recommended.`,
+      warning: 'Scalping on M1/M5 may be affected by slight price delay.',
+    };
+  }
+
+  if (priceQuality === 'near-realtime' || (priceQuality === 'delayed' && delayMinutes <= 10)) {
+    return {
+      style: 'swing',
+      reason: `Data has ~${delayMinutes}min delay — Swing Trading on H4/D1 is recommended as the delay has minimal impact on longer timeframes. Day Trading on H1 is acceptable with wider SL.`,
+      warning: 'Avoid Scalping — price delay will cause incorrect SL/TP placement. Day Trading requires wider stops to compensate.',
+    };
+  }
+
+  return {
+    style: 'swing',
+    reason: `Data is significantly delayed (~${delayMinutes}min) — ONLY Swing Trading on H4/D1 is recommended. Longer timeframes are less affected by price delays.`,
+    warning: 'DO NOT use Scalping or Day Trading with delayed data — SL/TP will be incorrectly placed relative to the real market price.',
+  };
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletion } from '@/lib/ai';
-import { fetchRealPrice, fetchOHLCVData } from '@/lib/market-data';
+import { fetchRealPrice, fetchOHLCVData, compensateForDelay, getRecommendedTradingStyle } from '@/lib/market-data';
 import { ICT_SIGNAL_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
 import { ICT_BEST_INSTRUMENTS } from '@/lib/ict-core-content';
 import { SMC_SETUPS, SMC_CONFLUENCE_FACTORS } from '@/lib/smc-knowledge';
@@ -49,10 +49,24 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const currentPrice = marketData.price || ohlcvData.currentPrice;
-    const dayHigh = marketData.high || ohlcvData.dayHigh;
-    const dayLow = marketData.low || ohlcvData.dayLow;
-    const changePercent = marketData.changePercent || ohlcvData.changePercent;
+    // ─── KEY FIX: Use OHLCV currentPrice as primary (more reliable than regularMarketPrice) ───
+    // The OHLCV currentPrice is derived from latest candle close, which is more recent
+    // than Yahoo Finance's regularMarketPrice which can be 15+ minutes delayed
+    const currentPrice = ohlcvData.currentPrice || marketData.price;
+    const dayHigh = ohlcvData.dayHigh || marketData.high;
+    const dayLow = ohlcvData.dayLow || marketData.low;
+    const changePercent = ohlcvData.changePercent || marketData.changePercent;
+
+    // ─── PRICE QUALITY ASSESSMENT ────────────────────────────────────
+    const priceQuality = marketData.priceQuality || ohlcvData.priceQuality || 'delayed';
+    const delayMinutes = marketData.delayMinutes ?? ohlcvData.delayMinutes ?? 15;
+    const isRealtime = priceQuality === 'realtime' || priceQuality === 'near-realtime';
+    const priceSource = marketData.source || ohlcvData.source || 'Unknown';
+
+    // Get recommended trading style based on data quality
+    const tradingStyleRec = getRecommendedTradingStyle(priceQuality, delayMinutes);
+
+    console.log(`[PRICE QUALITY] ${pair}: price=${currentPrice}, quality=${priceQuality}, delay=~${delayMinutes}min, source=${priceSource}, recommended=${tradingStyleRec.style}`);
 
     // ─── CRITICAL: Use shared trend analysis engine ────────────────
     const trendAnalysis = analyzeTrend(ohlcvData.candles, currentPrice);
@@ -60,6 +74,11 @@ export async function POST(req: NextRequest) {
     // Mode-specific configuration
     const modeConfig = getModeConfig(mode, timeframe);
     const modeLabel = modeConfig.label;
+
+    // ─── SCALPING WARNING: Not recommended with delayed data ───
+    const scalpingWarning = mode === 'scalping' && !isRealtime
+      ? `⚠️ SCALPING NOT RECOMMENDED: Price data is ~${delayMinutes}min delayed. SL/TP will be placed incorrectly relative to the real market price. Switch to ${tradingStyleRec.style} trading for accurate signals.`
+      : null;
 
     // Determine ICT instrument quality for this pair
     const ictTier = getICTInstrumentTier(pair);
@@ -159,19 +178,22 @@ export async function POST(req: NextRequest) {
     // ✅ CALL CONFLUENCE SCORE (was dead code before!)
     // ═══════════════════════════════════════════════════════════════════
     const confluenceScore = calculateConfluenceScore({
-      htfTrend: trendAnalysis.direction as 'bullish' | 'bearish' | 'ranging',
-      htfStrength: trendAnalysis.strength,
+      trendDirection: trendAnalysis.direction as 'bullish' | 'bearish' | 'ranging',
+      trendStrength: trendAnalysis.strength,
       structure: trendAnalysis.structure as 'HH/HL' | 'LH/LL' | 'Ranging',
-      emaAligned: trendAnalysis.ema20 > trendAnalysis.ema50 ? 'bullish' : trendAnalysis.ema20 < trendAnalysis.ema50 ? 'bearish' : 'neutral',
-      premiumDiscount: isPremium ? 'premium' : isDiscount ? 'discount' : 'neutral',
-      liquiditySweep: detectedICT.some(p => p.category === 'liquidity'),
-      mssWithDisplacement: detectedICT.some(p => p.name.includes('Market Structure Shift')),
-      fvgPresent: detectedICT.some(p => p.name.includes('Fair Value Gap')),
-      obPresent: detectedICT.some(p => p.name.includes('Order Block') || p.name.includes('Breaker')),
+      ema20Above50: trendAnalysis.ema20 > trendAnalysis.ema50,
+      priceInDiscount: isDiscount,
+      priceInPremium: isPremium,
+      isBuy: trendAnalysis.direction === 'bullish',
+      hasLiquiditySweep: detectedICT.some(p => p.category === 'liquidity'),
+      hasMSS: detectedICT.some(p => p.name.includes('Market Structure Shift')),
+      hasFVG: detectedICT.some(p => p.name.includes('Fair Value Gap')),
+      hasOB: detectedICT.some(p => p.name.includes('Order Block') || p.name.includes('Breaker')),
       killZoneActive: killZoneInfo.active,
-      oteEntry: pdZones ? (currentPrice >= pdZones.oteZone.start && currentPrice <= pdZones.oteZone.end) : false,
-      session: getCurrentSessionInfo(now.getUTCHours()).session,
-      rsiValue: trendAnalysis.rsi,
+      inOTEZone: pdZones ? (currentPrice >= pdZones.oteZone.start && currentPrice <= pdZones.oteZone.end) : false,
+      sessionActive: ['London', 'New York', 'London Close'].includes(getCurrentSessionInfo(now.getUTCHours()).session),
+      rsi: trendAnalysis.rsi,
+      riskReward: 2.0,
     });
 
     // ═══════════════════════════════════════════════════════════════════
@@ -207,7 +229,7 @@ ${stochInfo ? '- Stochastic: ' + stochInfo : ''}
 - PD Zones: ${pdZoneInfo}
 - Price is in ${isPremium ? 'PREMIUM (favors SELL)' : isDiscount ? 'DISCOUNT (favors BUY)' : 'NEUTRAL'} zone
 - Kill Zone: ${killZoneInfo.name} ${killZoneInfo.active ? '(ACTIVE ✅)' : '(Inactive — next: ' + killZoneInfo.nextKillZone + ')'}
-- Confluence Score: ${confluenceScore.grade} (${confluenceScore.score}/12 factors, ${confluenceScore.factors} confirmed)
+- Confluence Score: ${confluenceScore.tier} (${confluenceScore.total}/12 factors confirmed)
 
 ═══ DETECTED ICT PATTERNS ═══
 ${detectedICT.length > 0 ? detectedICT.map(p => `• ${p.name} (${p.type}) ${p.level ? '@ ' + formatPrice(pair, p.level) : ''} [Reliability: ${p.reliability}/5]`).join('\n') : '• No ICT patterns currently detected in recent candles'}
@@ -224,7 +246,7 @@ IMPORTANT RULES:
 1. Use ONLY the detected patterns listed above — do NOT invent patterns that were not detected
 2. If no ICT patterns are detected, acknowledge this and set lower confidence
 3. Reference actual RSI value (${trendAnalysis.rsi.toFixed(1)}), actual MACD data, and actual EMA values
-4. Your confidence MUST reflect the confluence score: ${confluenceScore.grade} = max ${confluenceScore.grade === 'A+' ? 95 : confluenceScore.grade === 'A' ? 85 : confluenceScore.grade === 'B' ? 75 : confluenceScore.grade === 'C' ? 60 : 50}%
+4. Your confidence MUST reflect the confluence score: ${confluenceScore.tier} = max ${confluenceScore.tier === 'A+' ? 95 : confluenceScore.tier === 'A' ? 85 : confluenceScore.tier === 'B' ? 75 : confluenceScore.tier === 'C' ? 60 : 50}%
 5. You MUST follow the trend direction: ${trendAnalysis.direction}
 
 Return ONLY valid JSON (no markdown, no backticks):
@@ -264,11 +286,11 @@ ${modeConfig.promptRules}
 
 PROFESSIONAL QUALITY GATE:
 - Confidence MUST NOT exceed the confluence score maximum
-- If confluence score is ${confluenceScore.grade}, max confidence = ${confluenceScore.grade === 'A+' ? 95 : confluenceScore.grade === 'A' ? 85 : confluenceScore.grade === 'B' ? 75 : confluenceScore.grade === 'C' ? 60 : 50}%
+- If confluence score is ${confluenceScore.tier}, max confidence = ${confluenceScore.tier === 'A+' ? 95 : confluenceScore.tier === 'A' ? 85 : confluenceScore.tier === 'B' ? 75 : confluenceScore.tier === 'C' ? 60 : 50}%
 - If less than 3 confluences, reduce confidence to max 55% and add warning
 - NEVER generate a signal that contradicts the mandatory direction above
 - If conditions are poor, it's BETTER to give low confidence with a clear warning`,
-      userMessage: `${modeLabel} signal for ${pair} on ${timeframe}. Live price: ${currentPrice}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%). Confluence: ${confluenceScore.grade} (${confluenceScore.score}/12). ICT Patterns: ${ictPatternNames.length > 0 ? ictPatternNames.join(', ') : 'None detected'}. Candlestick: ${candlePatternNames.length > 0 ? candlePatternNames.join(', ') : 'None detected'}. You MUST follow the trend direction. Use ONLY detected patterns.`,
+      userMessage: `${modeLabel} signal for ${pair} on ${timeframe}. Live price: ${currentPrice}. TREND: ${trendAnalysis.direction} (${trendAnalysis.strength}%). Confluence: ${confluenceScore.tier} (${confluenceScore.total}/12). ICT Patterns: ${ictPatternNames.length > 0 ? ictPatternNames.join(', ') : 'None detected'}. Candlestick: ${candlePatternNames.length > 0 ? candlePatternNames.join(', ') : 'None detected'}. You MUST follow the trend direction. Use ONLY detected patterns.`,
       temperature: 0.35,
       maxTokens: 500,
     });
@@ -293,9 +315,9 @@ PROFESSIONAL QUALITY GATE:
         }
 
         // ─── CONFLUENCE GATE: Cap confidence based on actual confluence score ──
-        const maxConfByConfluence = confluenceScore.grade === 'A+' ? 95 : confluenceScore.grade === 'A' ? 85 : confluenceScore.grade === 'B' ? 75 : confluenceScore.grade === 'C' ? 60 : 50;
+        const maxConfByConfluence = confluenceScore.tier === 'A+' ? 95 : confluenceScore.tier === 'A' ? 85 : confluenceScore.tier === 'B' ? 75 : confluenceScore.tier === 'C' ? 60 : 50;
         if (signal.confidence > maxConfByConfluence) {
-          console.warn(`[CONFLUENCE GATE] AI confidence ${signal.confidence}% capped to ${maxConfByConfluence}% (confluence: ${confluenceScore.grade})`);
+          console.warn(`[CONFLUENCE GATE] AI confidence ${signal.confidence}% capped to ${maxConfByConfluence}% (confluence: ${confluenceScore.tier})`);
           signal.confidence = maxConfByConfluence;
         }
 
@@ -337,6 +359,19 @@ PROFESSIONAL QUALITY GATE:
           signal.tp2 = profSLTP.tp2;
           signal.riskReward = `1:${profSLTP.rr}`;
 
+          // ─── DELAY COMPENSATION: Add buffer to SL when price is delayed ──
+          // This prevents the bug where SL ends up on wrong side of real price
+          if (delayMinutes > 1) {
+            const compensated = compensateForDelay(
+              signal.entry, signal.sl, signal.tp1, signal.tp2,
+              isBuySignal, delayMinutes, pair
+            );
+            if (compensated.buffer > 0) {
+              console.log(`[DELAY COMPENSATION] ${pair}: Added ${compensated.buffer} buffer to SL (delay: ~${delayMinutes}min). SL: ${signal.sl} → ${compensated.sl}`);
+              signal.sl = compensated.sl;
+            }
+          }
+
           // ─── FINAL SAFETY CHECK: Verify SL/TP are logically correct ──
           if (isBuySignal) {
             // BUY: SL MUST be below entry, TP above entry
@@ -366,6 +401,24 @@ PROFESSIONAL QUALITY GATE:
           if (signal.confidence > 60) {
             signal.confidence = 60;
           }
+        }
+
+        // ─── ADD PRICE DELAY WARNING ──
+        if (!isRealtime && delayMinutes > 3) {
+          const delayWarning = `⚠️ PRICE DELAY: Data is ~${delayMinutes}min delayed from ${priceSource}. Entry/SL/TP may differ from real market. ${tradingStyleRec.warning || 'Use Swing Trading for best accuracy.'}`;
+          signal.analysis = `${delayWarning} | ${signal.analysis || ''}`;
+          // Cap confidence when price is significantly delayed
+          if (mode === 'scalping' && delayMinutes > 3) {
+            signal.confidence = Math.min(signal.confidence, 50);
+          } else if (mode === 'daytrading' && delayMinutes > 10) {
+            signal.confidence = Math.min(signal.confidence, 60);
+          }
+        }
+
+        // Add scalping-specific warning
+        if (scalpingWarning) {
+          signal.analysis = `${scalpingWarning} | ${signal.analysis || ''}`;
+          signal.confidence = Math.min(signal.confidence, 45);
         }
       } catch {
         signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis, confluenceScore, detectedICT, detectedCandlestick, killZoneInfo);
@@ -405,6 +458,13 @@ PROFESSIONAL QUALITY GATE:
       })),
       dataSource: ohlcvData.source,
       dataDelay: ohlcvData.delay,
+      // Price quality and delay information
+      priceQuality: priceQuality,
+      delayMinutes: delayMinutes,
+      isRealtime: isRealtime,
+      priceSource: priceSource,
+      recommendedStyle: tradingStyleRec,
+      scalpingWarning: scalpingWarning,
       // Include trend analysis data
       trend: {
         direction: trendAnalysis.direction,

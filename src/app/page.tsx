@@ -80,6 +80,12 @@ interface ChartData {
   candles?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>;
   dataSource?: string;
   dataDelay?: string;
+  priceQuality?: 'realtime' | 'near-realtime' | 'delayed' | 'stale';
+  delayMinutes?: number;
+  isRealtime?: boolean;
+  priceSource?: string;
+  recommendedStyle?: { style: string; reason: string; warning?: string };
+  scalpingWarning?: string | null;
 }
 
 interface SignalData {
@@ -225,6 +231,46 @@ function SignalCard({ signal, mode }: { signal: SignalData; mode: TradingMode })
           <div className="pt-2 border-t border-white/10">
             <div className="text-xs text-gray-400 mb-1.5">📊 Live Chart Analysis:</div>
             <TradingViewChart data={signal.chartData} />
+          </div>
+        )}
+        {/* Price Delay Warning */}
+        {signal.chartData?.priceQuality && signal.chartData.priceQuality !== 'realtime' && signal.chartData.delayMinutes && signal.chartData.delayMinutes > 1 && (
+          <div className={`rounded-lg p-3 text-xs space-y-1 ${
+            signal.chartData.priceQuality === 'stale' ? 'bg-red-500/10 border border-red-500/30' :
+            signal.chartData.priceQuality === 'delayed' ? 'bg-orange-500/10 border border-orange-500/30' :
+            'bg-yellow-500/10 border border-yellow-500/30'
+          }`}>
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className={`w-3.5 h-3.5 ${
+                signal.chartData.priceQuality === 'stale' ? 'text-red-400' :
+                signal.chartData.priceQuality === 'delayed' ? 'text-orange-400' : 'text-yellow-400'
+              }`} />
+              <span className="font-semibold text-gray-200">Price Data: ~{signal.chartData.delayMinutes}min delay</span>
+            </div>
+            <div className="text-gray-400">
+              Source: {signal.chartData.priceSource || 'Yahoo Finance'} • Entry/SL/TP may differ from real market price
+            </div>
+            {signal.chartData.recommendedStyle && (
+              <div className="mt-1 text-gray-300">
+                ✅ Recommended: <span className="font-semibold text-emerald-400 capitalize">{signal.chartData.recommendedStyle.style === 'daytrading' ? 'Day Trading' : signal.chartData.recommendedStyle.style} Trading</span>
+                <span className="text-gray-500"> — {signal.chartData.recommendedStyle.reason}</span>
+              </div>
+            )}
+            {signal.chartData.scalpingWarning && (
+              <div className="mt-1 text-orange-300 font-semibold">
+                {signal.chartData.scalpingWarning}
+              </div>
+            )}
+          </div>
+        )}
+        {/* Real-time data indicator */}
+        {signal.chartData?.priceQuality === 'realtime' && (
+          <div className="rounded-lg p-2 text-xs bg-emerald-500/10 border border-emerald-500/30">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="font-semibold text-emerald-400">Real-time Data</span>
+              <span className="text-gray-500">• {signal.chartData.priceSource}</span>
+            </div>
           </div>
         )}
         {signal.analysis && (

@@ -7,6 +7,7 @@
 import { ICT_CORE_CONTENT, ICT_BEST_INSTRUMENTS, ICT_TRADING_MODELS } from './ict-core-content';
 import { SMC_KNOWLEDGE, SMC_TRADING_RULES } from './smc-knowledge';
 import { ICT_2022_COURSE, ICT_2022_SETUPS, ICT_2022_SESSIONS, ICT_2022_RULES, ICT_2022_SIGNAL_CHECKLIST } from './ict-2022-course';
+import { CANDLESTICK_KNOWLEDGE } from './trading-knowledge';
 
 // Combine all knowledge into one comprehensive reference
 export const ICT_KNOWLEDGE = `
@@ -14,6 +15,15 @@ export const ICT_KNOWLEDGE = `
 # Based on "Practical ICT Strategies" by Ayub Rana - 5th Edition
 # And the teachings of Michael J. Huddleston (Inner Circle Trader)
 # Plus ICT 2016-2017 Premium Mentorship Core Content (All 12 Months)
+
+---
+
+# JAPANESE CANDLESTICK PATTERNS
+# Based on "The Power of Japanese Candlestick Charts" by Fred K.H. Tam
+
+${CANDLESTICK_KNOWLEDGE}
+
+---
 
 ## Core ICT Concept:
 ICT is a trading methodology developed by Michael J. Huddleston. It focuses on the relationship between time and price.

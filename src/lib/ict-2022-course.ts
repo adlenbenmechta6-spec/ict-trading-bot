@@ -405,6 +405,35 @@ May-Aug: "Sell in May", summer depression, low volatility
 Sep-Nov: Market moves again, stocks tend to rise, new cycle
 
 ═══════════════════════════════════════════════════════════════
+CHAPTER 18: FIBONACCI & CONFLUENCE ZONES
+═══════════════════════════════════════════════════════════════
+FIBONACCI IN ICT METHODOLOGY:
+- Fibonacci is NOT used for traditional retracement/extension targets
+- ICT uses Fibonacci to identify Premium and Discount zones
+- 50% level = Equilibrium (the dividing line between premium and discount)
+- Above 50% = Premium zone (favors SELLING)
+- Below 50% = Discount zone (favors BUYING)
+
+KEY FIBONACCI LEVELS:
+- 0.618 (618): Primary retracement level — often used for first pullback entry
+- 0.705 (OTE Sweet Spot): The optimal trade entry zone — works 80% of the time
+- 0.786 (786): Deep retracement — last valid discount zone before structure break
+- 0.618-0.786 range = OTE (Optimal Trade Entry) zone
+- 1.0 (100%): Full retracement = structure break zone
+
+HOW TO DRAW FIBONACCI:
+- For bullish setup: Draw from swing LOW to swing HIGH — look for entry below 50%
+- For bearish setup: Draw from swing HIGH to swing LOW — look for entry above 50%
+- ALWAYS draw from the liquidity sweep point to the displacement extreme
+- The FVG should be on the 50% line or the better side (discount for buy, premium for sell)
+
+CONFLUENCE ZONES:
+- When Fibonacci level aligns with an Order Block, FVG, or key level = HIGH probability entry
+- OTE zone (0.618-0.786) + Order Block = Gold standard entry
+- Equilibrium (50%) + Kill Zone timing = Strong confluence
+- Multiple timeframes showing same Fibonacci level = Very powerful
+
+═══════════════════════════════════════════════════════════════
 CHAPTER 19: ICT 2022 MODEL (STEP-BY-STEP)
 ═══════════════════════════════════════════════════════════════
 1. Price trades through major BSL/SSL (Asian H/L, London H/L, PDH/PDL)
@@ -523,6 +552,36 @@ NY TRADE ENTRY RULES:
 - Sell: 10pts ES above 07:20 open price
 
 05:00 AM RULE: Mark 05:00 AM opening price — sets up NY OTE. If no London Judas, expect it at 05:00 AM.
+
+═══════════════════════════════════════════════════════════════
+CHAPTER 27: ADVANCED ENTRY TECHNIQUES & REFINEMENTS
+═══════════════════════════════════════════════════════════════
+ENTRY REFINEMENT RULES:
+- Never enter on the first FVG after displacement — wait for the SECOND FVG for higher probability
+- The best entries are at the Consequent Encroachment (50%) of the FVG, not at the extremes
+- If price gaps through the FVG without filling it, the FVG is still valid for future reference
+- FVGs from higher timeframes (H1/H4) are more reliable than M5/M15 FVGs
+
+LIQUIDITY SWEEP CONFIRMATION:
+- A true liquidity sweep must CLOSE beyond the old high/low, not just wick through it
+- Wicks through old highs/lows without a close = weak sweep, likely to continue
+- The strongest sweeps have displacement (large-body candle) immediately after
+- If the sweep candle is small (doji-like), it may not be a real sweep — wait for confirmation
+
+DISPLACEMENT CRITERIA:
+- Displacement = a large-body candle that shows institutional intent
+- On ES/SP500: Displacement candle should be 10+ points
+- On Forex majors: Displacement should be clearly visible (not a small wick)
+- On XAU/USD: Displacement should be $15-30+ depending on timeframe
+- On XAG/USD: Displacement should be $0.30-0.60+ due to higher volatility
+- If displacement is weak, the MSS may fail — reduce position size or skip
+
+MULTI-TIMEFRAME ENTRY ALIGNMENT:
+- HTF (H4/D1) shows the BIAS and direction
+- MTF (H1) shows the PD Arrays and structure
+- LTF (M5/M15) shows the precise entry timing
+- Entry is valid when ALL three timeframes align — if they conflict, step aside
+- The HTF bias MUST be respected — never trade against the H4/D1 trend
 
 ═══════════════════════════════════════════════════════════════
 CHAPTER 28: HOURS OF OPERATION — SESSION RANGES

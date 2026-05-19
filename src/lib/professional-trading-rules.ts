@@ -106,12 +106,19 @@ Your edge comes from DISCIPLINE, PATIENCE, and ONLY taking A+ setups.
 9. Place SL below OB/FVG (logical level, not arbitrary)
 10. Target opposite liquidity pool for TP
 
-## EXIT RULES:
-- TP1: First liquidity pool in trade direction (take 50% off)
-- TP2: Next liquidity pool or FVG fill (let 50% run)
-- Move SL to breakeven after TP1 hit
-- Close remaining position if market structure shifts against trade
+## EXIT RULES (CRITICAL — FOLLOW STRICTLY TO AVOID WINNERS TURNING INTO LOSERS):
+- TP1: First liquidity pool in trade direction (MANDATORY: Close 50% of position here)
+- TP2: Next liquidity pool or FVG fill (let remaining 50% run)
+- IMMEDIATELY after TP1 is hit: Move SL to Breakeven (entry price) — this is NON-NEGOTIABLE
+- If price reaches 50% of TP1 distance: Consider moving SL to Breakeven early (especially for volatile pairs like XAG/USD)
+- Trailing Stop after TP1: Trail SL behind each new swing (for BUY: trail below each higher low; for SELL: trail above each lower high)
+- Close remaining position if market structure shifts against trade (e.g., new LH/LL for BUY, new HL/HH for SELL)
 - Time-based exit: If trade hasn't moved in your favor by NY lunch, consider exit
+- NEVER let a winning trade turn into a losing trade — this is the #1 amateur mistake!
+- If you were up $800 on XAG/USD and it reversed to hit your SL at -$200, you failed to:
+  1. Take 50% profit at TP1 (would have locked in $400)
+  2. Move SL to breakeven after TP1 (would have lost $0 on the rest, not $200)
+  3. Trail your stop behind structure as price moved in your favor
 
 ## NO-TRADE CONDITIONS (DO NOT GENERATE SIGNALS):
 - Price is in equilibrium zone (near 50% Fib) — no clear advantage
@@ -424,6 +431,97 @@ export function calculateProfessionalSLTP(params: {
   const rr = parseFloat((Math.abs(tp1 - entry) / Math.abs(sl - entry)).toFixed(1));
 
   return { sl, tp1, tp2, rr, slReason, tp1Reason, tp2Reason };
+}
+
+// ─── EXIT MANAGEMENT SYSTEM ─────────────────────────────────────────
+// Calculates breakeven level, trailing stop, and partial close rules
+// This prevents the #1 mistake: letting a winning trade turn into a loser
+export interface ExitManagement {
+  breakevenPrice: number;          // Move SL here after TP1 hit
+  earlyBETrigger: number;          // Move SL to BE when price reaches this (50% of TP1)
+  partialClose1Pct: number;        // Close this % at TP1 (50%)
+  partialClose2Pct: number;        // Close this % at TP2 (remaining 50%)
+  trailingStopSteps: Array<{
+    triggerPrice: number;          // Price must reach this level
+    newSL: number;                 // Trail SL to this level
+    reason: string;                // Why this trailing level
+  }>;
+  exitRules: string[];             // Human-readable exit rules
+}
+
+export function calculateExitManagement(params: {
+  entry: number;
+  sl: number;
+  tp1: number;
+  tp2: number;
+  isBuy: boolean;
+  pair: string;
+  mode: 'scalping' | 'daytrading' | 'swing';
+}): ExitManagement {
+  const { entry, sl, tp1, tp2, isBuy, pair, mode } = params;
+  const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
+
+  // Breakeven = entry price (after TP1 hit, move SL here)
+  const breakevenPrice = entry;
+
+  // Early BE trigger = 50% of TP1 distance
+  const tp1Distance = Math.abs(tp1 - entry);
+  const earlyBETrigger = isBuy
+    ? parseFloat((entry + tp1Distance * 0.5).toFixed(decimals))
+    : parseFloat((entry - tp1Distance * 0.5).toFixed(decimals));
+
+  // Trailing stop steps: trail behind each 25% increment from TP1 to TP2
+  const tp2Distance = Math.abs(tp2 - entry);
+  const trailingSteps: ExitManagement['trailingStopSteps'] = [];
+
+  const steps = mode === 'scalping' ? 2 : mode === 'daytrading' ? 3 : 4;
+  for (let i = 1; i <= steps; i++) {
+    const fraction = i / (steps + 1);
+    const triggerDist = tp1Distance + (tp2Distance - tp1Distance) * fraction;
+    const trailDist = tp1Distance * (0.3 + fraction * 0.7); // Trail gets wider as profit grows
+
+    const triggerPrice = isBuy
+      ? parseFloat((entry + triggerDist).toFixed(decimals))
+      : parseFloat((entry - triggerDist).toFixed(decimals));
+
+    const newSL = isBuy
+      ? parseFloat((entry + trailDist * 0.5).toFixed(decimals))  // Trail above entry
+      : parseFloat((entry - trailDist * 0.5).toFixed(decimals)); // Trail below entry
+
+    trailingSteps.push({
+      triggerPrice,
+      newSL,
+      reason: `Price ${isBuy ? 'above' : 'below'} ${triggerPrice} → trail SL to ${newSL} (locked in profit)`,
+    });
+  }
+
+  // Exit rules as human-readable strings
+  const exitRules = [
+    `📊 STEP 1: When price reaches ${earlyBETrigger}, consider moving SL to breakeven (${entry})`,
+    `📊 STEP 2: When price hits TP1 (${tp1}), CLOSE 50% of position and move SL to breakeven (${entry})`,
+    `📊 STEP 3: Trail SL behind each new swing high/low as price moves toward TP2`,
+    `📊 STEP 4: When price hits TP2 (${tp2}), close remaining 50%`,
+    `🚨 CRITICAL: NEVER let a winning trade turn into a losing trade!`,
+    `🚨 If you're up significantly and price stalls, take profit — don't wait for TP2 if structure weakens`,
+  ];
+
+  // Add pair-specific warnings
+  if (pair === 'XAG/USD') {
+    exitRules.push(`⚠️ XAG/USD is VERY volatile (1.2% daily) — always take 50% at TP1 and move SL to BE!`);
+    exitRules.push(`⚠️ Silver can reverse 50-100 cents in minutes — trailing stop is essential`);
+  }
+  if (pair === 'XAU/USD') {
+    exitRules.push(`⚠️ Gold can have sharp reversals — always lock in 50% at TP1`);
+  }
+
+  return {
+    breakevenPrice: parseFloat(breakevenPrice.toFixed(decimals)),
+    earlyBETrigger,
+    partialClose1Pct: 50,
+    partialClose2Pct: 50,
+    trailingStopSteps: trailingSteps,
+    exitRules,
+  };
 }
 
 // ─── NO-TRADE CONDITION CHECKER ─────────────────────────────────────

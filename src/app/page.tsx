@@ -86,6 +86,14 @@ interface ChartData {
   priceSource?: string;
   recommendedStyle?: { style: string; reason: string; warning?: string };
   scalpingWarning?: string | null;
+  exitManagement?: {
+    breakevenPrice: number;
+    earlyBETrigger: number;
+    partialClose1Pct: number;
+    partialClose2Pct: number;
+    trailingStopSteps: Array<{ triggerPrice: number; newSL: number; reason: string }>;
+    exitRules: string[];
+  };
 }
 
 interface SignalData {
@@ -315,6 +323,71 @@ function SignalCard({ signal, mode }: { signal: SignalData; mode: TradingMode })
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Exit Management - Breakeven & Trailing Stop Rules */}
+        {signal.chartData?.exitManagement && (
+          <div className="pt-2 border-t border-white/10">
+            <div className="rounded-lg border border-cyan-500/30 overflow-hidden">
+              <div className="px-3 py-1.5 bg-cyan-600/20 text-xs font-bold flex items-center gap-1.5 text-cyan-400">
+                📋 Exit Management — Protect Your Profits!
+              </div>
+              <div className="px-3 py-2.5 space-y-2 text-xs bg-cyan-950/20">
+                {/* BE + Partial Close */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-black/20 rounded-lg p-2">
+                    <div className="text-gray-400 mb-0.5">Breakeven Price</div>
+                    <div className="text-cyan-300 font-mono font-bold">{signal.chartData.exitManagement.breakevenPrice}</div>
+                    <div className="text-gray-500 text-[10px]">Move SL here after TP1</div>
+                  </div>
+                  <div className="bg-black/20 rounded-lg p-2">
+                    <div className="text-gray-400 mb-0.5">Early BE Trigger</div>
+                    <div className="text-yellow-300 font-mono font-bold">{signal.chartData.exitManagement.earlyBETrigger}</div>
+                    <div className="text-gray-500 text-[10px]">Move SL to BE at this price</div>
+                  </div>
+                </div>
+                {/* Partial Close Rules */}
+                <div className="flex items-center gap-3 bg-black/20 rounded-lg p-2">
+                  <div className="text-center flex-1">
+                    <div className="text-gray-400 text-[10px]">Close at TP1</div>
+                    <div className="text-emerald-400 font-bold">{signal.chartData.exitManagement.partialClose1Pct}%</div>
+                  </div>
+                  <div className="text-gray-600">→</div>
+                  <div className="text-center flex-1">
+                    <div className="text-gray-400 text-[10px]">Move SL to</div>
+                    <div className="text-cyan-400 font-bold font-mono">{signal.chartData.exitManagement.breakevenPrice}</div>
+                  </div>
+                  <div className="text-gray-600">→</div>
+                  <div className="text-center flex-1">
+                    <div className="text-gray-400 text-[10px]">Close at TP2</div>
+                    <div className="text-emerald-400 font-bold">{signal.chartData.exitManagement.partialClose2Pct}%</div>
+                  </div>
+                </div>
+                {/* Trailing Stop Steps */}
+                {signal.chartData.exitManagement.trailingStopSteps.length > 0 && (
+                  <div className="pt-1 border-t border-white/5">
+                    <div className="text-gray-400 mb-1">Trailing Stop Steps:</div>
+                    <div className="space-y-1">
+                      {signal.chartData.exitManagement.trailingStopSteps.map((step, i) => (
+                        <div key={i} className="flex items-center gap-2 text-[11px]">
+                          <span className="text-cyan-500 font-mono w-4">{i + 1}.</span>
+                          <span className="text-gray-300">Price → <span className="text-white font-mono">{step.triggerPrice}</span></span>
+                          <span className="text-gray-500">|</span>
+                          <span className="text-gray-300">Trail SL → <span className="text-cyan-300 font-mono">{step.newSL}</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Critical Warning */}
+                <div className="flex items-start gap-1.5 pt-1 border-t border-white/5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-red-300 font-medium text-[11px] leading-relaxed">
+                    NEVER let a winning trade turn into a loser! Take 50% at TP1, move SL to breakeven, then trail the rest.
+                  </div>
+                </div>
               </div>
             </div>
           </div>

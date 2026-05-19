@@ -22,6 +22,7 @@ import {
   buildProfessionalSignalContext,
   calculateConfluenceScore,
   calculateProfessionalSLTP,
+  calculateExitManagement,
   shouldAvoidTrade,
   getCurrentSessionInfo,
 } from '@/lib/professional-trading-rules';
@@ -409,6 +410,22 @@ PROFESSIONAL QUALITY GATE:
           }
         }
 
+        // ─── EXIT MANAGEMENT: Calculate breakeven + trailing stop rules ──
+        // This prevents winning trades from turning into losers
+        const exitMgmt = calculateExitManagement({
+          entry: signal.entry,
+          sl: signal.sl,
+          tp1: signal.tp1,
+          tp2: signal.tp2,
+          isBuy: signal.type === 'BUY',
+          pair,
+          mode: mode as 'scalping' | 'daytrading' | 'swing',
+        });
+
+        // Add exit management instructions to the analysis
+        const exitMgmtSummary = `\n\n📋 EXIT MANAGEMENT:\n• After TP1 (${signal.tp1}): Close 50% + Move SL to Breakeven (${exitMgmt.breakevenPrice})\n• Early BE Trigger: ${exitMgmt.earlyBETrigger} (move SL to BE when price reaches this)\n• TP2 Target: ${signal.tp2} (close remaining 50%)\n• 🚨 NEVER let a winner turn into a loser!`;
+        signal.analysis = (signal.analysis || '') + exitMgmtSummary;
+
         // ─── ADD PRICE DELAY WARNING ──
         if (!isRealtime && delayMinutes > 3) {
           const delayWarning = `⚠️ PRICE DELAY: Data is ~${delayMinutes}min delayed from ${priceSource}. Entry/SL/TP may differ from real market. ${tradingStyleRec.warning || 'Use Swing Trading for best accuracy.'}`;
@@ -484,6 +501,8 @@ PROFESSIONAL QUALITY GATE:
       // Professional session & timing data
       session: getCurrentSessionInfo(now.getUTCHours()),
       tradeAvoidance: avoidCheck,
+      // Exit management data (breakeven, trailing stop, partial close rules)
+      exitManagement: exitMgmt || null,
     };
 
     return NextResponse.json({ success: true, signal });

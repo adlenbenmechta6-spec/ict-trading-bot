@@ -29,27 +29,45 @@ import {
 import { detectAllICTPatterns, calculatePDZones, getCurrentKillZone } from '@/lib/ict-patterns';
 import { detectAllPatterns, calculateRSI, calculateMACD, calculateBollingerBands, calculateStochastic } from '@/lib/trading-patterns';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // ─── MAIN SIGNAL ENDPOINT ─────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const { pair = 'EUR/USD', timeframe = 'H4', mode = 'swing' } = body;
+
+  // ─── FETCH MARKET DATA (with individual error handling) ────────
+  let marketData: Awaited<ReturnType<typeof fetchRealPrice>>;
+  let ohlcvData: Awaited<ReturnType<typeof fetchOHLCVData>>;
+
   try {
-    const body = await req.json();
-    const { pair = 'EUR/USD', timeframe = 'H4', mode = 'swing' } = body;
-
-    // Fetch both real-time price and OHLCV data for the specific timeframe
-    const [marketData, ohlcvData] = await Promise.all([
-      fetchRealPrice(pair),
-      fetchOHLCVData(pair, timeframe),
+    [marketData, ohlcvData] = await Promise.all([
+      fetchRealPrice(pair).catch(err => {
+        console.error('[PRICE FETCH ERROR]', err);
+        return { pair, price: 0, change: 0, changePercent: 0, high: 0, low: 0, timestamp: new Date().toISOString(), source: 'error', priceQuality: 'stale' as const, delayMinutes: 999 };
+      }),
+      fetchOHLCVData(pair, timeframe).catch(err => {
+        console.error('[OHLCV FETCH ERROR]', err);
+        return { pair, timeframe, candles: [] as any[], currentPrice: 0, dayHigh: 0, dayLow: 0, change: 0, changePercent: 0, source: 'error', priceQuality: 'stale' as const, delayMinutes: 999 };
+      }),
     ]);
+  } catch (error: any) {
+    console.error('[MARKET DATA FATAL]', error);
+    return NextResponse.json({
+      success: false,
+      error: `Market data fetch failed: ${error?.message || 'Unknown error'}. Check that price APIs (Yahoo Finance, Twelve Data) are accessible.`,
+    });
+  }
 
-    if (marketData.price === 0 && ohlcvData.currentPrice === 0) {
-      return NextResponse.json({
-        success: false,
-        error: `Could not fetch the current price for ${pair}. Please try again.`,
-      });
-    }
+  if (marketData.price === 0 && ohlcvData.currentPrice === 0) {
+    return NextResponse.json({
+      success: false,
+      error: `Could not fetch the current price for ${pair}. All price sources (Twelve Data, Finnhub, Yahoo Finance) returned no data. If deployed on Vercel, Yahoo Finance may be blocked. Set TWELVE_DATA_API_KEY or FINNHUB_API_KEY env vars for real-time data.`,
+    });
+  }
 
+  // ─── SIGNAL GENERATION (wrapped in try for detailed error reporting) ───
+  try {
     // ─── KEY FIX: Use OHLCV currentPrice as primary (more reliable than regularMarketPrice) ───
     // The OHLCV currentPrice is derived from latest candle close, which is more recent
     // than Yahoo Finance's regularMarketPrice which can be 15+ minutes delayed
@@ -535,9 +553,15 @@ PROFESSIONAL QUALITY GATE:
     };
 
     return NextResponse.json({ success: true, signal });
-  } catch (error) {
-    console.error('Signal generation error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to generate signal. Please try again.' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[SIGNAL FATAL ERROR]', error);
+    const errMsg = error?.message || 'Unknown error';
+    const errStack = process.env.NODE_ENV === 'development' ? error?.stack : undefined;
+    return NextResponse.json({
+      success: false,
+      error: `Signal generation failed: ${errMsg}`,
+      debug: errStack ? errStack.split('\n').slice(0, 5).join('\n') : undefined,
+    }, { status: 500 });
   }
 }
 

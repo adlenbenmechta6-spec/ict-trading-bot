@@ -283,6 +283,7 @@ Return ONLY valid JSON (no markdown, no backticks):
   "entry": number,
   "tp1": number,
   "tp2": number,
+  "tp3": number,
   "sl": number,
   "pattern": "pattern name from detected patterns above",
   "rsi": ${trendAnalysis.rsi.toFixed(1)},
@@ -299,10 +300,10 @@ Return ONLY valid JSON (no markdown, no backticks):
 }
 
 IMPORTANT SL/TP RULES — VIOLATION = INVALID SIGNAL:
-- If type is "BUY": entry < tp1 < tp2 AND sl < entry (SL MUST be below entry!)
-- If type is "SELL": tp2 < tp1 < entry AND sl > entry (SL MUST be above entry!)
+- If type is "BUY": entry < tp1 < tp2 < tp3 AND sl < entry (SL MUST be below entry!)
+- If type is "SELL": tp3 < tp2 < tp1 < entry AND sl > entry (SL MUST be above entry!)
 - SL MUST be on the OPPOSITE side of entry from TP
-- R:R minimum 1:2 (TP distance must be at least 2x SL distance) — aim for 1:3
+- Multi-Level TP System: TP1=1:1 RR (close 50%), TP2=1:2 RR (close 30%), TP3=1:3+ RR (close 20%)
 - SL at logical level (below OB/FVG for BUY, above OB/FVG for SELL)
 - TP at liquidity pools (BSL/SSL targets), not arbitrary multiples
 - All prices must be realistic and near the current price of ${currentPrice}
@@ -352,13 +353,14 @@ PROFESSIONAL QUALITY GATE:
         // SELL: SL must be ABOVE entry, TP below entry
         // This prevents the bug where SL > entry on a BUY signal
         const validated = validateSignalPrices(
-          { type: signal.type, entry: signal.entry, tp1: signal.tp1, tp2: signal.tp2, sl: signal.sl },
+          { type: signal.type, entry: signal.entry, tp1: signal.tp1, tp2: signal.tp2, tp3: signal.tp3 || 0, sl: signal.sl },
           currentPrice,
           pair
         );
         signal.entry = validated.entry;
         signal.tp1 = validated.tp1;
         signal.tp2 = validated.tp2;
+        signal.tp3 = validated.tp3;
         signal.sl = validated.sl;
 
         // ─── PROFESSIONAL: Recalculate SL/TP using structure-aware ATR ──
@@ -383,6 +385,7 @@ PROFESSIONAL QUALITY GATE:
           signal.sl = profSLTP.sl;
           signal.tp1 = profSLTP.tp1;
           signal.tp2 = profSLTP.tp2;
+          signal.tp3 = profSLTP.tp3;
           signal.riskReward = `1:${profSLTP.rr}`;
 
           // ─── DELAY COMPENSATION: Add buffer to SL when price is delayed ──
@@ -402,34 +405,38 @@ PROFESSIONAL QUALITY GATE:
           if (isBuySignal) {
             // BUY: SL MUST be below entry, TP above entry, SL must be positive
             const slInvalid = signal.sl >= signal.entry || signal.sl <= 0;
-            if (slInvalid || signal.tp1 <= signal.entry || signal.tp2 <= signal.tp1) {
-              console.error(`[FATAL CHECK] BUY signal has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing ATR fallback.`);
+            if (slInvalid || signal.tp1 <= signal.entry || signal.tp2 <= signal.tp1 || (signal.tp3 && signal.tp3 <= signal.tp2)) {
+              console.error(`[FATAL CHECK] BUY signal has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2} TP3=${signal.tp3}. Forcing ATR fallback.`);
               const atrDist = calculateSLTPDistances(ohlcvData.candles, mode);
               signal.sl = parseFloat((currentPrice - atrDist.sl).toFixed(getDecimals(pair)));
               signal.tp1 = parseFloat((currentPrice + atrDist.tp1).toFixed(getDecimals(pair)));
               signal.tp2 = parseFloat((currentPrice + atrDist.tp2).toFixed(getDecimals(pair)));
+              signal.tp3 = parseFloat((currentPrice + atrDist.tp2 * 1.3).toFixed(getDecimals(pair)));
               // Extra safety: if SL is still negative or above entry, use percentage-based fallback
               if (signal.sl <= 0 || signal.sl >= signal.entry) {
                 const slPct = mode === 'scalping' ? 0.003 : mode === 'daytrading' ? 0.005 : 0.008;
                 signal.sl = parseFloat((currentPrice * (1 - slPct)).toFixed(getDecimals(pair)));
-                signal.tp1 = parseFloat((currentPrice * (1 + slPct * 2)).toFixed(getDecimals(pair)));
-                signal.tp2 = parseFloat((currentPrice * (1 + slPct * 3)).toFixed(getDecimals(pair)));
+                signal.tp1 = parseFloat((currentPrice * (1 + slPct * 1)).toFixed(getDecimals(pair)));
+                signal.tp2 = parseFloat((currentPrice * (1 + slPct * 2)).toFixed(getDecimals(pair)));
+                signal.tp3 = parseFloat((currentPrice * (1 + slPct * 3)).toFixed(getDecimals(pair)));
               }
             }
           } else {
             // SELL: SL MUST be above entry, TP below entry
-            if (signal.sl <= signal.entry || signal.tp1 >= signal.entry || signal.tp2 >= signal.tp1) {
-              console.error(`[FATAL CHECK] SELL signal has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing ATR fallback.`);
+            if (signal.sl <= signal.entry || signal.tp1 >= signal.entry || signal.tp2 >= signal.tp1 || (signal.tp3 && signal.tp3 >= signal.tp2)) {
+              console.error(`[FATAL CHECK] SELL signal has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2} TP3=${signal.tp3}. Forcing ATR fallback.`);
               const atrDist = calculateSLTPDistances(ohlcvData.candles, mode);
               signal.sl = parseFloat((currentPrice + atrDist.sl).toFixed(getDecimals(pair)));
               signal.tp1 = parseFloat((currentPrice - atrDist.tp1).toFixed(getDecimals(pair)));
               signal.tp2 = parseFloat((currentPrice - atrDist.tp2).toFixed(getDecimals(pair)));
+              signal.tp3 = parseFloat((currentPrice - atrDist.tp2 * 1.3).toFixed(getDecimals(pair)));
               // Extra safety: if SL is above reasonable range, use percentage-based fallback
               if (signal.sl <= signal.entry || signal.sl > currentPrice * 1.1) {
                 const slPct = mode === 'scalping' ? 0.003 : mode === 'daytrading' ? 0.005 : 0.008;
                 signal.sl = parseFloat((currentPrice * (1 + slPct)).toFixed(getDecimals(pair)));
-                signal.tp1 = parseFloat((currentPrice * (1 - slPct * 2)).toFixed(getDecimals(pair)));
-                signal.tp2 = parseFloat((currentPrice * (1 - slPct * 3)).toFixed(getDecimals(pair)));
+                signal.tp1 = parseFloat((currentPrice * (1 - slPct * 1)).toFixed(getDecimals(pair)));
+                signal.tp2 = parseFloat((currentPrice * (1 - slPct * 2)).toFixed(getDecimals(pair)));
+                signal.tp3 = parseFloat((currentPrice * (1 - slPct * 3)).toFixed(getDecimals(pair)));
               }
             }
           }
@@ -451,13 +458,14 @@ PROFESSIONAL QUALITY GATE:
           sl: signal.sl,
           tp1: signal.tp1,
           tp2: signal.tp2,
+          tp3: signal.tp3,
           isBuy: signal.type === 'BUY',
           pair,
           mode: mode as 'scalping' | 'daytrading' | 'swing',
         });
 
-        // Add exit management instructions to the analysis
-        const exitMgmtSummary = `\n\n📋 EXIT MANAGEMENT:\n• After TP1 (${signal.tp1}): Close 50% + Move SL to Breakeven (${exitMgmt.breakevenPrice})\n• Early BE Trigger: ${exitMgmt.earlyBETrigger} (move SL to BE when price reaches this)\n• TP2 Target: ${signal.tp2} (close remaining 50%)\n• 🚨 NEVER let a winner turn into a loser!`;
+        // Add exit management instructions to the analysis (Multi-Level TP: 50/30/20)
+        const exitMgmtSummary = `\n\n📋 EXIT MANAGEMENT (Multi-Level TP):\n• TP1 (${signal.tp1}): Close 50% + Move SL to Breakeven (${exitMgmt.breakevenPrice})\n• TP2 (${signal.tp2}): Close 30% + Trail SL behind structure\n• TP3 (${signal.tp3}): Close remaining 20%\n• Early BE Trigger: ${exitMgmt.earlyBETrigger} (move SL to BE when price reaches this)\n• 🚨 NEVER let a winner turn into a loser!`;
         signal.analysis = (signal.analysis || '') + exitMgmtSummary;
 
         // ─── ADD PRICE DELAY WARNING ──
@@ -523,6 +531,7 @@ PROFESSIONAL QUALITY GATE:
       entry: signal.entry,
       tp1: signal.tp1,
       tp2: signal.tp2,
+      tp3: signal.tp3,
       sl: signal.sl,
       confidence: signal.confidence,
       riskReward: signal.riskReward,
@@ -656,14 +665,16 @@ function generateFallbackSignal(
   const atr = professionalRange * atrMult;
 
   const entry = currentPrice;
-  // Professional multipliers: SL=1x, TP1=2x, TP2=3.5x of ATR
+  // Professional multipliers: SL=1x, TP1=1x, TP2=2x, TP3=3x of ATR (Multi-Level TP)
   const slDist = atr * 1.0;
-  const tp1Dist = atr * 2.0;
-  const tp2Dist = atr * 3.5;
+  const tp1Dist = atr * 1.0;
+  const tp2Dist = atr * 2.0;
+  const tp3Dist = atr * 3.0;
   const tp1 = isBuy ? entry + tp1Dist : entry - tp1Dist;
   const tp2 = isBuy ? entry + tp2Dist : entry - tp2Dist;
+  const tp3 = isBuy ? entry + tp3Dist : entry - tp3Dist;
   const sl = isBuy ? entry - slDist : entry + slDist;
-  const rr = Math.abs(tp1 - entry) / Math.abs(sl - entry);
+  const rr = Math.abs(tp2 - entry) / Math.abs(sl - entry);
 
   // ═══════════════════════════════════════════════════════════════════════
   // FIX v3: Professional Confidence Calculation
@@ -823,6 +834,7 @@ function generateFallbackSignal(
     entry: parseFloat(entry.toFixed(decimals)),
     tp1: parseFloat(tp1.toFixed(decimals)),
     tp2: parseFloat(tp2.toFixed(decimals)),
+    tp3: parseFloat(tp3.toFixed(decimals)),
     sl: parseFloat(sl.toFixed(decimals)),
     pattern,
     rsi,

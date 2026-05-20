@@ -120,13 +120,14 @@ export async function chatCompletion(options: {
   temperature?: number;
   maxTokens?: number;
 }): Promise<string | null> {
-  // Strategy 1: Try Google Gemini if API key is available (works on Vercel)
-  if (process.env.GEMINI_API_KEY) {
-    const result = await geminiChatCompletion(options);
-    if (result) return result;
-  }
+  // Strategy 1: Try Google Gemini (always try — key has hardcoded fallback for Vercel)
+  // CRITICAL FIX: Previously only tried Gemini if env var was set, but the key
+  // is hardcoded as fallback inside geminiChatCompletion(). This caused "Failed to
+  // generate signal" on Vercel when env vars weren't configured yet.
+  const geminiResult = await geminiChatCompletion(options);
+  if (geminiResult) return geminiResult;
 
-  // Strategy 2: Try z-ai-web-dev-sdk (works in internal environment)
+  // Strategy 2: Try z-ai-web-dev-sdk (works in internal environment only)
   const zaiResult = await zaiChatCompletion(options);
   if (zaiResult) return zaiResult;
 

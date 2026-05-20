@@ -315,7 +315,7 @@ export function calculateProfessionalSLTP(params: {
   fvgHigh?: number;
   fvgLow?: number;
   mode: 'scalping' | 'daytrading' | 'swing';
-}): { sl: number; tp1: number; tp2: number; rr: number; slReason: string; tp1Reason: string; tp2Reason: string } {
+}): { sl: number; tp1: number; tp2: number; tp3: number; rr: number; slReason: string; tp1Reason: string; tp2Reason: string; tp3Reason: string } {
   const { entry, isBuy, atr, pair, swingHigh, swingLow, mode } = params;
   const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
 
@@ -393,44 +393,62 @@ export function calculateProfessionalSLTP(params: {
   }
 
   // Professional TP placement: At liquidity pools, not arbitrary multiples
+  // Multi-Level Take Profit System:
+  // TP1: 1:1 RR → Close 50% of position
+  // TP2: 1:2 RR → Close 30% of position  
+  // TP3: 1:3+ RR → Close remaining 20% of position
   const slDistance = Math.abs(sl - entry);
   let tp1: number;
   let tp1Reason: string;
   let tp2: number;
   let tp2Reason: string;
+  let tp3: number;
+  let tp3Reason: string;
 
   if (isBuy) {
-    // TP1: Minimum 2x SL distance or at first liquidity target
-    const atrTP1 = entry + slDistance * 2;
-    const structureTP1 = swingHigh > entry ? swingHigh : entry + slDistance * 2.5;
-    tp1 = Math.max(atrTP1, structureTP1, entry + slDistance * 2);
+    // TP1: 1:1 RR (SL distance) or at first liquidity target
+    const atrTP1 = entry + slDistance * 1;
+    const structureTP1 = swingHigh > entry ? swingHigh : entry + slDistance * 2;
+    tp1 = Math.max(atrTP1, structureTP1, entry + slDistance * 1);
     tp1Reason = tp1 >= swingHigh && swingHigh > entry 
-      ? `At swing high / BSL target (${swingHigh.toFixed(decimals)})`
-      : `2x SL distance (${(slDistance * 2).toFixed(decimals)} points)`;
+      ? `At swing high / BSL target (${swingHigh.toFixed(decimals)}) — Close 50%`
+      : `1:1 RR (${slDistance.toFixed(decimals)} points) — Close 50%`;
 
-    // TP2: 3.5x SL or next major liquidity
-    tp2 = Math.max(entry + slDistance * 3.5, tp1 + slDistance * 1.5);
-    tp2Reason = `3.5x SL distance — targeting extended liquidity`;
+    // TP2: 1:2 RR or next major liquidity
+    const atrTP2 = entry + slDistance * 2;
+    tp2 = Math.max(atrTP2, tp1 + slDistance * 1);
+    tp2Reason = `1:2 RR (${(slDistance * 2).toFixed(decimals)} points) — Close 30%`;
+
+    // TP3: 1:3+ RR or extended liquidity target
+    const atrTP3 = entry + slDistance * 3;
+    tp3 = Math.max(atrTP3, tp2 + slDistance * 1);
+    tp3Reason = `1:3+ RR (${(slDistance * 3).toFixed(decimals)} points) — Close remaining 20%`;
   } else {
-    const atrTP1 = entry - slDistance * 2;
-    const structureTP1 = swingLow < entry ? swingLow : entry - slDistance * 2.5;
-    tp1 = Math.min(atrTP1, structureTP1, entry - slDistance * 2);
+    const atrTP1 = entry - slDistance * 1;
+    const structureTP1 = swingLow < entry ? swingLow : entry - slDistance * 2;
+    tp1 = Math.min(atrTP1, structureTP1, entry - slDistance * 1);
     tp1Reason = tp1 <= swingLow && swingLow < entry
-      ? `At swing low / SSL target (${swingLow.toFixed(decimals)})`
-      : `2x SL distance (${(slDistance * 2).toFixed(decimals)} points)`;
+      ? `At swing low / SSL target (${swingLow.toFixed(decimals)}) — Close 50%`
+      : `1:1 RR (${slDistance.toFixed(decimals)} points) — Close 50%`;
 
-    tp2 = Math.min(entry - slDistance * 3.5, tp1 - slDistance * 1.5);
-    tp2Reason = `3.5x SL distance — targeting extended liquidity`;
+    const atrTP2 = entry - slDistance * 2;
+    tp2 = Math.min(atrTP2, tp1 - slDistance * 1);
+    tp2Reason = `1:2 RR (${(slDistance * 2).toFixed(decimals)} points) — Close 30%`;
+
+    const atrTP3 = entry - slDistance * 3;
+    tp3 = Math.min(atrTP3, tp2 - slDistance * 1);
+    tp3Reason = `1:3+ RR (${(slDistance * 3).toFixed(decimals)} points) — Close remaining 20%`;
   }
 
   // Round to proper decimals
   sl = parseFloat(sl.toFixed(decimals));
   tp1 = parseFloat(tp1.toFixed(decimals));
   tp2 = parseFloat(tp2.toFixed(decimals));
+  tp3 = parseFloat(tp3.toFixed(decimals));
 
-  const rr = parseFloat((Math.abs(tp1 - entry) / Math.abs(sl - entry)).toFixed(1));
+  const rr = parseFloat((Math.abs(tp2 - entry) / Math.abs(sl - entry)).toFixed(1));
 
-  return { sl, tp1, tp2, rr, slReason, tp1Reason, tp2Reason };
+  return { sl, tp1, tp2, tp3, rr, slReason, tp1Reason, tp2Reason, tp3Reason };
 }
 
 // ─── EXIT MANAGEMENT SYSTEM ─────────────────────────────────────────
@@ -440,7 +458,8 @@ export interface ExitManagement {
   breakevenPrice: number;          // Move SL here after TP1 hit
   earlyBETrigger: number;          // Move SL to BE when price reaches this (50% of TP1)
   partialClose1Pct: number;        // Close this % at TP1 (50%)
-  partialClose2Pct: number;        // Close this % at TP2 (remaining 50%)
+  partialClose2Pct: number;        // Close this % at TP2 (30%)
+  partialClose3Pct: number;        // Close this % at TP3 (20%)
   trailingStopSteps: Array<{
     triggerPrice: number;          // Price must reach this level
     newSL: number;                 // Trail SL to this level
@@ -454,11 +473,12 @@ export function calculateExitManagement(params: {
   sl: number;
   tp1: number;
   tp2: number;
+  tp3?: number;
   isBuy: boolean;
   pair: string;
   mode: 'scalping' | 'daytrading' | 'swing';
 }): ExitManagement {
-  const { entry, sl, tp1, tp2, isBuy, pair, mode } = params;
+  const { entry, sl, tp1, tp2, tp3, isBuy, pair, mode } = params;
   const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
 
   // Breakeven = entry price (after TP1 hit, move SL here)
@@ -495,14 +515,16 @@ export function calculateExitManagement(params: {
     });
   }
 
-  // Exit rules as human-readable strings
+  // Exit rules as human-readable strings — Multi-Level TP (50/30/20)
+  const tp3Price = tp3 || (isBuy ? tp2 + tp1Distance * 0.5 : tp2 - tp1Distance * 0.5);
   const exitRules = [
     `📊 STEP 1: When price reaches ${earlyBETrigger}, consider moving SL to breakeven (${entry})`,
     `📊 STEP 2: When price hits TP1 (${tp1}), CLOSE 50% of position and move SL to breakeven (${entry})`,
-    `📊 STEP 3: Trail SL behind each new swing high/low as price moves toward TP2`,
-    `📊 STEP 4: When price hits TP2 (${tp2}), close remaining 50%`,
+    `📊 STEP 3: When price hits TP2 (${tp2}), CLOSE 30% of position and trail SL behind structure`,
+    `📊 STEP 4: When price hits TP3 (${tp3Price}), CLOSE remaining 20% of position`,
+    `📊 PROFIT DISTRIBUTION: TP1=50% | TP2=30% | TP3=20%`,
     `🚨 CRITICAL: NEVER let a winning trade turn into a losing trade!`,
-    `🚨 If you're up significantly and price stalls, take profit — don't wait for TP2 if structure weakens`,
+    `🚨 If you're up significantly and price stalls, take profit — don't wait for TP3 if structure weakens`,
   ];
 
   // Add pair-specific warnings
@@ -518,7 +540,8 @@ export function calculateExitManagement(params: {
     breakevenPrice: parseFloat(breakevenPrice.toFixed(decimals)),
     earlyBETrigger,
     partialClose1Pct: 50,
-    partialClose2Pct: 50,
+    partialClose2Pct: 30,
+    partialClose3Pct: 20,
     trailingStopSteps: trailingSteps,
     exitRules,
   };

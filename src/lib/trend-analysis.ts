@@ -505,6 +505,7 @@ export interface SignalPrices {
   entry: number;
   tp1: number;
   tp2: number;
+  tp3: number;
   sl: number;
 }
 
@@ -528,7 +529,7 @@ export function validateSignalPrices(
   })();
   const minDistance = currentPrice * minDistancePct;
 
-  let { entry, tp1, tp2, sl } = signal;
+  let { entry, tp1, tp2, tp3, sl } = signal;
 
   // Ensure entry is near current price (within 0.5%)
   if (Math.abs(entry - currentPrice) / currentPrice > 0.005) {
@@ -537,7 +538,7 @@ export function validateSignalPrices(
   }
 
   if (isBuy) {
-    // BUY: SL must be BELOW entry, TP1/TP2 must be ABOVE entry
+    // BUY: SL must be BELOW entry, TP1/TP2/TP3 must be ABOVE entry
     // Fix SL if it's above or equal to entry
     if (sl >= entry) {
       console.warn(`[PRICE VALIDATION] BUY signal has SL (${sl}) >= entry (${entry}). Fixing SL below entry.`);
@@ -546,23 +547,29 @@ export function validateSignalPrices(
     // Fix TP1 if it's below or equal to entry
     if (tp1 <= entry) {
       console.warn(`[PRICE VALIDATION] BUY signal has TP1 (${tp1}) <= entry (${entry}). Fixing TP1 above entry.`);
-      tp1 = entry + minDistance * 4;
+      tp1 = entry + minDistance * 2;
     }
     // Fix TP2 if it's below or equal to TP1
     if (tp2 <= tp1) {
       console.warn(`[PRICE VALIDATION] BUY signal has TP2 (${tp2}) <= TP1 (${tp1}). Fixing TP2 above TP1.`);
-      tp2 = entry + minDistance * 7;
+      tp2 = entry + minDistance * 4;
     }
-    // Ensure proper ordering: SL < entry < TP1 < TP2
-    if (!(sl < entry && entry < tp1 && tp1 < tp2)) {
+    // Fix TP3 if it's below or equal to TP2
+    if (!tp3 || tp3 <= tp2) {
+      console.warn(`[PRICE VALIDATION] BUY signal has invalid TP3. Fixing TP3 above TP2.`);
+      tp3 = entry + minDistance * 6;
+    }
+    // Ensure proper ordering: SL < entry < TP1 < TP2 < TP3
+    if (!(sl < entry && entry < tp1 && tp1 < tp2 && tp2 < tp3)) {
       console.warn(`[PRICE VALIDATION] BUY price ordering invalid. Recalculating all.`);
       const distance = minDistance * 2;
       sl = entry - distance;
-      tp1 = entry + distance * 2;
-      tp2 = entry + distance * 3.5;
+      tp1 = entry + distance * 1;
+      tp2 = entry + distance * 2;
+      tp3 = entry + distance * 3;
     }
   } else {
-    // SELL: TP2 < TP1 < entry < SL
+    // SELL: TP3 < TP2 < TP1 < entry < SL
     // Fix SL if it's below or equal to entry
     if (sl <= entry) {
       console.warn(`[PRICE VALIDATION] SELL signal has SL (${sl}) <= entry (${entry}). Fixing SL above entry.`);
@@ -571,20 +578,26 @@ export function validateSignalPrices(
     // Fix TP1 if it's above or equal to entry
     if (tp1 >= entry) {
       console.warn(`[PRICE VALIDATION] SELL signal has TP1 (${tp1}) >= entry (${entry}). Fixing TP1 below entry.`);
-      tp1 = entry - minDistance * 4;
+      tp1 = entry - minDistance * 2;
     }
     // Fix TP2 if it's above or equal to TP1
     if (tp2 >= tp1) {
       console.warn(`[PRICE VALIDATION] SELL signal has TP2 (${tp2}) >= TP1 (${tp1}). Fixing TP2 below TP1.`);
-      tp2 = entry - minDistance * 7;
+      tp2 = entry - minDistance * 4;
     }
-    // Ensure proper ordering: TP2 < TP1 < entry < SL
-    if (!(tp2 < tp1 && tp1 < entry && entry < sl)) {
+    // Fix TP3 if it's above or equal to TP2
+    if (!tp3 || tp3 >= tp2) {
+      console.warn(`[PRICE VALIDATION] SELL signal has invalid TP3. Fixing TP3 below TP2.`);
+      tp3 = entry - minDistance * 6;
+    }
+    // Ensure proper ordering: TP3 < TP2 < TP1 < entry < SL
+    if (!(tp3 < tp2 && tp2 < tp1 && tp1 < entry && entry < sl)) {
       console.warn(`[PRICE VALIDATION] SELL price ordering invalid. Recalculating all.`);
       const distance = minDistance * 2;
       sl = entry + distance;
-      tp1 = entry - distance * 2;
-      tp2 = entry - distance * 3.5;
+      tp1 = entry - distance * 1;
+      tp2 = entry - distance * 2;
+      tp3 = entry - distance * 3;
     }
   }
 
@@ -593,6 +606,7 @@ export function validateSignalPrices(
     entry: parseFloat(entry.toFixed(decimals)),
     tp1: parseFloat(tp1.toFixed(decimals)),
     tp2: parseFloat(tp2.toFixed(decimals)),
+    tp3: parseFloat(tp3.toFixed(decimals)),
     sl: parseFloat(sl.toFixed(decimals)),
   };
 }

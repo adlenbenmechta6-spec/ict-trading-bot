@@ -162,7 +162,7 @@ Be concise and professional. Use specific ICT Core Content month references. Res
 
     // ─── CRITICAL: Validate SL/TP are logically correct ────────────
     const validatedChart = validateSignalPrices(
-      { type: chartData.type, entry: chartData.entry, tp1: chartData.tp1, tp2: chartData.tp2, sl: chartData.sl },
+      { type: chartData.type, entry: chartData.entry, tp1: chartData.tp1, tp2: chartData.tp2, tp3: chartData.tp2 * (chartData.type === 'BUY' ? 1.1 : 0.9) || 0, sl: chartData.sl },
       currentPrice,
       pair
     );

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send, TrendingUp, BarChart3, Search, Bot, User, Zap, AlertTriangle, ChevronDown, Clock,
+  Send, TrendingUp, BarChart3, Search, Bot, User, Zap, AlertTriangle, ChevronDown, Clock, CalendarDays, X,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -588,6 +588,7 @@ export default function Home() {
   const [selectedPair, setSelectedPair] = useState('XAU/USD');
   const [tradingMode, setTradingMode] = useState<TradingMode>('swing');
   const [selectedTimeframe, setSelectedTimeframe] = useState('H4');
+  const [showGuide, setShowGuide] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -869,6 +870,17 @@ export default function Home() {
           {/* Separator */}
           <div className="w-px h-6 bg-white/10 mx-1" />
 
+          {/* Separator 2 */}
+          <div className="w-px h-6 bg-white/10 mx-1" />
+
+          {/* Trading Guide Button */}
+          <button
+            onClick={() => setShowGuide(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border whitespace-nowrap bg-amber-600/20 text-amber-300 border-amber-500/30 hover:bg-amber-600/30"
+          >
+            📖 دليل التداول
+          </button>
+
           {/* Timeframe Buttons — Change based on selected mode */}
           <div className="flex items-center gap-1">
             <Clock className="w-3 h-3 text-gray-500 mr-0.5" />
@@ -956,6 +968,282 @@ export default function Home() {
           Trading involves high risk. Educational analyses only.
         </p>
       </div>
+
+      {/* Trading Guide Modal */}
+      <AnimatePresence>
+        {showGuide && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowGuide(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#17212b] rounded-2xl border border-white/10 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-[#17212b] border-b border-white/10 px-5 py-4 flex items-center justify-between z-10">
+                <div className="flex items-center gap-3">
+                  <CalendarDays className="w-6 h-6 text-amber-400" />
+                  <div>
+                    <h2 className="text-white font-bold text-lg">دليل التداول - التوقيت الجزائري</h2>
+                    <p className="text-gray-400 text-xs">الايام والاوقات المثالية لكل عملة ونمط تداول</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowGuide(false)} className="text-gray-400 hover:text-white transition-colors p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-5">
+                {/* Best Days Section */}
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/10 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-emerald-600/15 flex items-center gap-2">
+                    <span className="text-lg">📅</span>
+                    <span className="text-emerald-400 font-bold text-sm">افضل ايام التداول في الاسبوع</span>
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-3 bg-black/20 rounded-lg px-3 py-2">
+                      <span className="text-emerald-400 font-bold text-sm w-24">الثلاثاء</span>
+                      <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-0.5 rounded-full font-bold">A+</span>
+                      <span className="text-gray-300 text-xs flex-1">افضل يوم على الاطلاق - Smart Money ينفذ صفقاته الحقيقية بعد اكتمال تراكم الاثنين</span>
+                    </div>
+                    <div className="flex items-center gap-3 bg-black/20 rounded-lg px-3 py-2">
+                      <span className="text-emerald-400 font-bold text-sm w-24">الاربعاء</span>
+                      <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-0.5 rounded-full font-bold">A+</span>
+                      <span className="text-gray-300 text-xs flex-1">ثاني افضل يوم - استمرار الاتجاه الاسبوعي مع حجم تداول عالي و Kill Zones واضحة</span>
+                    </div>
+                    <div className="flex items-center gap-3 bg-black/20 rounded-lg px-3 py-2">
+                      <span className="text-yellow-400 font-bold text-sm w-24">الخميس</span>
+                      <span className="bg-yellow-500/20 text-yellow-300 text-xs px-2 py-0.5 rounded-full font-bold">A</span>
+                      <span className="text-gray-300 text-xs flex-1">يوم جيد لكن يحتاج حذر - غالباً يحدث reversal لاتجاه الاسبوع</span>
+                    </div>
+                    <div className="flex items-center gap-3 bg-black/20 rounded-lg px-3 py-2">
+                      <span className="text-orange-400 font-bold text-sm w-24">الجمعة صباحاً</span>
+                      <span className="bg-orange-500/20 text-orange-300 text-xs px-2 py-0.5 rounded-full font-bold">B</span>
+                      <span className="text-gray-300 text-xs flex-1">فقط حتى 12:00 ظهراً بتوقيت الجزائر - بعد ذلك السيولة تنخفض</span>
+                    </div>
+                    <div className="flex items-center gap-3 bg-red-950/30 rounded-lg px-3 py-2 border border-red-500/10">
+                      <span className="text-red-400 font-bold text-sm w-24">الاثنين</span>
+                      <span className="bg-red-500/20 text-red-300 text-xs px-2 py-0.5 rounded-full font-bold">C</span>
+                      <span className="text-red-300 text-xs flex-1">يوم تراكم - تجنب! Smart Money يؤسس النطاق الاسبوعي فقط</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kill Zones - Algerian Time */}
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-cyan-600/15 flex items-center gap-2">
+                    <span className="text-lg">⏰</span>
+                    <span className="text-cyan-400 font-bold text-sm">Kill Zones - التوقيت الجزائري (UTC+1)</span>
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="bg-black/20 rounded-lg p-2.5 text-center">
+                        <div className="text-gray-400 mb-1">London KZ</div>
+                        <div className="text-cyan-300 font-bold text-sm">07:00 - 10:00</div>
+                        <div className="text-gray-500 text-[10px] mt-1">ممتاز لـ EUR/USD, GBP/USD</div>
+                      </div>
+                      <div className="bg-black/20 rounded-lg p-2.5 text-center border border-cyan-500/30">
+                        <div className="text-gray-400 mb-1">NY KZ</div>
+                        <div className="text-emerald-300 font-bold text-sm">12:00 - 15:00</div>
+                        <div className="text-gray-500 text-[10px] mt-1">الافضل لجميع العملات</div>
+                      </div>
+                      <div className="bg-black/20 rounded-lg p-2.5 text-center">
+                        <div className="text-gray-400 mb-1">London Close</div>
+                        <div className="text-cyan-300 font-bold text-sm">15:00 - 17:00</div>
+                        <div className="text-gray-500 text-[10px] mt-1">جيد لـ XAU/USD</div>
+                      </div>
+                    </div>
+                    <div className="bg-red-950/20 border border-red-500/10 rounded-lg px-3 py-2 flex items-center gap-2">
+                      <span className="text-red-400 text-xs">⚠️</span>
+                      <span className="text-red-300 text-xs">تجنب: 17:00 - 19:30 (غداء نيويورك - سيولة منخفضة) | الجمعة بعد 17:00 (اغلاق اسبوعي)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-Currency Schedule Table */}
+                <div className="rounded-xl border border-purple-500/20 bg-purple-950/10 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-purple-600/15 flex items-center gap-2">
+                    <span className="text-lg">💱</span>
+                    <span className="text-purple-400 font-bold text-sm">جدول التداول لكل عملة - الايام والاوقات والنمط المثالي</span>
+                  </div>
+                  <div className="px-4 py-3">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-gray-400 border-b border-white/10">
+                            <th className="text-left py-2 px-2 font-semibold">العملة</th>
+                            <th className="text-center py-2 px-1 font-semibold">النمط</th>
+                            <th className="text-center py-2 px-1 font-semibold">الايام</th>
+                            <th className="text-center py-2 px-1 font-semibold">الوقت (جزائري)</th>
+                            <th className="text-center py-2 px-1 font-semibold">الجودة</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">XAU/USD</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">SWING</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">12:00-17:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-emerald-400 font-bold">A+</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">XAU/USD</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">DAY</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">12:00-15:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-emerald-400 font-bold">A</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">GBP/JPY</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">SWING</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">07:00-15:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-emerald-400 font-bold">A+</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">EUR/USD</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">DAY</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">07:00-15:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-emerald-400 font-bold">A</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">GBP/USD</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">DAY</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">07:00-15:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-emerald-400 font-bold">A</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">USD/JPY</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">DAY</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">07:00-15:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-yellow-400 font-bold">A-</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">BTC/USD</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">SWING</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">12:00-17:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-yellow-400 font-bold">A-</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">ETH/USD</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">SWING</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">12:00-17:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-yellow-400 font-bold">B+</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">US30</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">SWING</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">14:30-17:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-emerald-400 font-bold">A</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">NAS100</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">SWING</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">14:30-17:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-emerald-400 font-bold">A</span></td>
+                          </tr>
+                          <tr className="border-b border-white/5">
+                            <td className="py-2 px-2 text-white font-bold">XAG/USD</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">SWING</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">12:00-17:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-yellow-400 font-bold">B+</span></td>
+                          </tr>
+                          <tr>
+                            <td className="py-2 px-2 text-white font-bold">AUD/USD</td>
+                            <td className="py-2 px-1 text-center"><span className="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">DAY</span></td>
+                            <td className="py-2 px-1 text-center text-gray-300">ثلاثاء-خميس</td>
+                            <td className="py-2 px-1 text-center text-cyan-300 font-mono">22:00-02:00</td>
+                            <td className="py-2 px-1 text-center"><span className="text-orange-400 font-bold">B</span></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FundedNext Special Schedule */}
+                <div className="rounded-xl border border-purple-500/20 bg-purple-950/10 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-purple-600/15 flex items-center gap-2">
+                    <span className="text-lg">🏆</span>
+                    <span className="text-purple-400 font-bold text-sm">خطة FundedNext 6K - النمط المثالي</span>
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="bg-black/20 rounded-lg p-3 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-purple-300 font-bold text-xs">النمط:</span>
+                        <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded text-xs font-bold">SWING (H4/D1)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-purple-300 font-bold text-xs">الايام:</span>
+                        <span className="text-gray-300 text-xs">الثلاثاء + الاربعاء + الخميس فقط</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-purple-300 font-bold text-xs">الوقت:</span>
+                        <span className="text-cyan-300 text-xs font-mono">12:00 - 17:00 (توقيت جزائري)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-purple-300 font-bold text-xs">العملات:</span>
+                        <span className="text-gray-300 text-xs">XAU/USD (افضل) | GBP/JPY | US30</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-purple-300 font-bold text-xs">المخاطرة:</span>
+                        <span className="text-red-300 text-xs">1% كحد اقصى = $60 لكل صفقة</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-purple-300 font-bold text-xs">الهدف الاسبوعي:</span>
+                        <span className="text-emerald-300 text-xs">3 صفقات عالية الجودة فقط</span>
+                      </div>
+                    </div>
+                    <div className="bg-purple-950/30 border border-purple-500/10 rounded-lg px-3 py-2">
+                      <div className="text-purple-300 text-xs font-bold mb-1">قواعد FundedNext Stellar 2-Step:</div>
+                      <div className="grid grid-cols-2 gap-1 text-[10px]">
+                        <span className="text-gray-400">Phase 1 هدف: <span className="text-white font-bold">8% ($480)</span></span>
+                        <span className="text-gray-400">Phase 2 هدف: <span className="text-white font-bold">5% ($300)</span></span>
+                        <span className="text-gray-400">Max Loss: <span className="text-red-300 font-bold">10% ($600)</span></span>
+                        <span className="text-gray-400">Daily Loss: <span className="text-red-300 font-bold">5% ($300)</span></span>
+                        <span className="text-gray-400">Min Days: <span className="text-white font-bold">5 ايام</span></span>
+                        <span className="text-gray-400">Performance: <span className="text-emerald-300 font-bold">95%</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Key Rules */}
+                <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-amber-600/15 flex items-center gap-2">
+                    <span className="text-lg">⚡</span>
+                    <span className="text-amber-400 font-bold text-sm">قواعد ذهبية سريعة</span>
+                  </div>
+                  <div className="px-4 py-3 space-y-1.5 text-xs">
+                    <div className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">✅</span><span className="text-gray-300">3 ايام فقط × صفقة واحدة عالية الجودة = افضل من 5 ايام × صفقات عشوائية</span></div>
+                    <div className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">✅</span><span className="text-gray-300">SWING مع البيانات المتأخرة اكثر اماناً من DAY او SCALP</span></div>
+                    <div className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">✅</span><span className="text-gray-300">XAU/USD و GBP/JPY افضل عملات للارباح مع SWING</span></div>
+                    <div className="flex items-start gap-2"><span className="text-red-400 mt-0.5">❌</span><span className="text-gray-300">لا تتداول يوم الاثنين (يوم تراكم - اتجاه غير واضح)</span></div>
+                    <div className="flex items-start gap-2"><span className="text-red-400 mt-0.5">❌</span><span className="text-gray-300">لا تتداول الجمعة بعد الظهر (Smart Money يغلق صفقاته)</span></div>
+                    <div className="flex items-start gap-2"><span className="text-red-400 mt-0.5">❌</span><span className="text-gray-300">تجنب SCALPING مع البيانات المتأخرة - النتائج غير دقيقة</span></div>
+                    <div className="flex items-start gap-2"><span className="text-red-400 mt-0.5">❌</span><span className="text-gray-300">لا تفتح صفقات خلال 10 دقائق بعد اخبار FOMC/NFP</span></div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

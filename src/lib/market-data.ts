@@ -345,7 +345,7 @@ async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
   const symbol = TWELVE_DATA_SYMBOLS[pair];
   if (!symbol) return null;
 
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
+  const apiKey = process.env.TWELVE_DATA_API_KEY || '6d1883e5a28241adb9d45ba7d2be7eda';
   if (!apiKey) return null;
 
   // Skip pairs that previously failed on Twelve Data (paid plan required or other error)
@@ -488,7 +488,7 @@ async function fetchMetalsPrice(pair: string): Promise<MarketData | null> {
     // For XAG/USD: If we have XAU/USD real-time price, we can estimate XAG/USD direction
     if (pair === 'XAG/USD' && canUseTwelveData()) {
       try {
-        const apiKey = process.env.TWELVE_DATA_API_KEY;
+        const apiKey = process.env.TWELVE_DATA_API_KEY || '6d1883e5a28241adb9d45ba7d2be7eda';
         if (apiKey) {
           const xauUrl = `https://api.twelvedata.com/quote?symbol=XAU/USD&apikey=${apiKey}`;
           const xauResponse = await fetch(xauUrl, { signal: AbortSignal.timeout(5000) });
@@ -992,7 +992,7 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
   const symbol = TWELVE_DATA_SYMBOLS[pair];
   if (!symbol) return null;
 
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
+  const apiKey = process.env.TWELVE_DATA_API_KEY || '6d1883e5a28241adb9d45ba7d2be7eda';
   if (!apiKey) return null;
 
   // Skip pairs that previously failed on Twelve Data (paid plan required or other error)

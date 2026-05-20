@@ -8,7 +8,8 @@ async function geminiChatCompletion(options: {
   temperature?: number;
   maxTokens?: number;
 }): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  // API key with fallback for Vercel deployment (env vars must be set in Vercel dashboard)
+  const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCYb7IpKVy-9Vry6ct3B1nUgHjUCko1C5k';
   if (!apiKey) return null;
 
   try {

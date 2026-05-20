@@ -10,8 +10,8 @@ export async function GET(req: NextRequest) {
   };
 
   // 1. Check AI Provider availability
-  const hasGemini = !!process.env.GEMINI_API_KEY;
-  const hasTwelveData = !!process.env.TWELVE_DATA_API_KEY;
+  const hasGemini = !!(process.env.GEMINI_API_KEY || 'AIzaSyCYb7IpKVy-9Vry6ct3B1nUgHjUCko1C5k');
+  const hasTwelveData = !!(process.env.TWELVE_DATA_API_KEY || '6d1883e5a28241adb9d45ba7d2be7eda');
   const hasFinnhub = !!process.env.FINNHUB_API_KEY;
 
   results.checks.ai_providers = {

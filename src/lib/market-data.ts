@@ -386,9 +386,20 @@ async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
     const low = parseFloat(quoteData.low) || 0;
 
     // Verify the price is truly real-time by checking the timestamp
-    const quoteTimestamp = quoteData.timestamp ? new Date(quoteData.timestamp).getTime() : 0;
-    const quoteAge = Date.now() - quoteTimestamp;
-    const isLive = quoteAge < 60000; // Less than 1 minute old
+    let quoteTimestamp = 0;
+    try {
+      const ts = quoteData.timestamp || quoteData.datetime;
+      if (ts) {
+        quoteTimestamp = new Date(ts).getTime();
+        // If timestamp is in the future or more than 1 day old, it's invalid
+        if (isNaN(quoteTimestamp) || quoteTimestamp > Date.now() + 3600000 || quoteTimestamp < Date.now() - 86400000) {
+          quoteTimestamp = 0;
+        }
+      }
+    } catch { /* ignore timestamp parse errors */ }
+    const quoteAge = quoteTimestamp > 0 ? Date.now() - quoteTimestamp : 0;
+    const isLive = quoteAge > 0 && quoteAge < 60000; // Less than 1 minute old
+    const delayMin = isLive ? 0 : (quoteAge > 0 ? Math.round(quoteAge / 60000) : 1);
 
     console.log(`[Twelve Data] ✅ ${pair}: ${price} (${isLive ? 'LIVE' : `~${Math.round(quoteAge / 60000)}min`}, credits: ${twelveDataUsage.creditsUsedThisMinute}/8 this min, ${twelveDataUsage.creditsUsedToday}/800 today)`);
 
@@ -397,10 +408,10 @@ async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
       changePercent: parseFloat(changePercent.toFixed(2)),
       high: high > 0 ? high : undefined,
       low: low > 0 ? low : undefined,
-      delay: isLive ? 'Real-time' : `~${Math.round(quoteAge / 60000)}min`,
+      delay: isLive ? 'Real-time' : `~${delayMin}min`,
       isRealtime: isLive,
       priceQuality: isLive ? 'realtime' : 'near-realtime',
-      delayMinutes: isLive ? 0 : Math.round(quoteAge / 60000),
+      delayMinutes: delayMin,
     });
   } catch (error) {
     console.error(`Twelve Data fetch failed for ${pair}:`, error);

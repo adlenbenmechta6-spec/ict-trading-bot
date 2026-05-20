@@ -400,22 +400,37 @@ PROFESSIONAL QUALITY GATE:
 
           // ─── FINAL SAFETY CHECK: Verify SL/TP are logically correct ──
           if (isBuySignal) {
-            // BUY: SL MUST be below entry, TP above entry
-            if (signal.sl >= signal.entry || signal.tp1 <= signal.entry || signal.tp2 <= signal.tp1) {
-              console.error(`[FATAL CHECK] BUY signal still has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing ATR fallback.`);
+            // BUY: SL MUST be below entry, TP above entry, SL must be positive
+            const slInvalid = signal.sl >= signal.entry || signal.sl <= 0;
+            if (slInvalid || signal.tp1 <= signal.entry || signal.tp2 <= signal.tp1) {
+              console.error(`[FATAL CHECK] BUY signal has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing ATR fallback.`);
               const atrDist = calculateSLTPDistances(ohlcvData.candles, mode);
               signal.sl = parseFloat((currentPrice - atrDist.sl).toFixed(getDecimals(pair)));
               signal.tp1 = parseFloat((currentPrice + atrDist.tp1).toFixed(getDecimals(pair)));
               signal.tp2 = parseFloat((currentPrice + atrDist.tp2).toFixed(getDecimals(pair)));
+              // Extra safety: if SL is still negative or above entry, use percentage-based fallback
+              if (signal.sl <= 0 || signal.sl >= signal.entry) {
+                const slPct = mode === 'scalping' ? 0.003 : mode === 'daytrading' ? 0.005 : 0.008;
+                signal.sl = parseFloat((currentPrice * (1 - slPct)).toFixed(getDecimals(pair)));
+                signal.tp1 = parseFloat((currentPrice * (1 + slPct * 2)).toFixed(getDecimals(pair)));
+                signal.tp2 = parseFloat((currentPrice * (1 + slPct * 3)).toFixed(getDecimals(pair)));
+              }
             }
           } else {
             // SELL: SL MUST be above entry, TP below entry
             if (signal.sl <= signal.entry || signal.tp1 >= signal.entry || signal.tp2 >= signal.tp1) {
-              console.error(`[FATAL CHECK] SELL signal still has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing ATR fallback.`);
+              console.error(`[FATAL CHECK] SELL signal has invalid SL/TP! SL=${signal.sl} Entry=${signal.entry} TP1=${signal.tp1} TP2=${signal.tp2}. Forcing ATR fallback.`);
               const atrDist = calculateSLTPDistances(ohlcvData.candles, mode);
               signal.sl = parseFloat((currentPrice + atrDist.sl).toFixed(getDecimals(pair)));
               signal.tp1 = parseFloat((currentPrice - atrDist.tp1).toFixed(getDecimals(pair)));
               signal.tp2 = parseFloat((currentPrice - atrDist.tp2).toFixed(getDecimals(pair)));
+              // Extra safety: if SL is above reasonable range, use percentage-based fallback
+              if (signal.sl <= signal.entry || signal.sl > currentPrice * 1.1) {
+                const slPct = mode === 'scalping' ? 0.003 : mode === 'daytrading' ? 0.005 : 0.008;
+                signal.sl = parseFloat((currentPrice * (1 + slPct)).toFixed(getDecimals(pair)));
+                signal.tp1 = parseFloat((currentPrice * (1 - slPct * 2)).toFixed(getDecimals(pair)));
+                signal.tp2 = parseFloat((currentPrice * (1 - slPct * 3)).toFixed(getDecimals(pair)));
+              }
             }
           }
         }

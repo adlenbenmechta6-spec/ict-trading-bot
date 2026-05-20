@@ -314,7 +314,7 @@ export function calculateProfessionalSLTP(params: {
   obLow?: number;
   fvgHigh?: number;
   fvgLow?: number;
-  mode: 'scalping' | 'daytrading' | 'swing';
+  mode: 'scalping' | 'daytrading' | 'swing' | 'fundednext';
 }): { sl: number; tp1: number; tp2: number; tp3: number; rr: number; slReason: string; tp1Reason: string; tp2Reason: string; tp3Reason: string } {
   const { entry, isBuy, atr, pair, swingHigh, swingLow, mode } = params;
   const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
@@ -328,8 +328,8 @@ export function calculateProfessionalSLTP(params: {
     const slCandidates: { price: number; reason: string }[] = [];
 
     // ATR-based
-    const atrSL = entry - atr * (mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : 1.5);
-    slCandidates.push({ price: atrSL, reason: `${mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : 1.5}x ATR below entry` });
+    const atrSL = entry - atr * (mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : mode === 'fundednext' ? 1.5 : 1.5);
+    slCandidates.push({ price: atrSL, reason: `${mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : mode === 'fundednext' ? 1.5 : 1.5}x ATR below entry` });
 
     // Structure-based
     if (swingLow > 0) {
@@ -364,8 +364,8 @@ export function calculateProfessionalSLTP(params: {
     // For SELL: SL above the highest of these levels
     const slCandidates: { price: number; reason: string }[] = [];
 
-    const atrSL = entry + atr * (mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : 1.5);
-    slCandidates.push({ price: atrSL, reason: `${mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : 1.5}x ATR above entry` });
+    const atrSL = entry + atr * (mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : mode === 'fundednext' ? 1.5 : 1.5);
+    slCandidates.push({ price: atrSL, reason: `${mode === 'scalping' ? 0.8 : mode === 'daytrading' ? 1.2 : mode === 'fundednext' ? 1.5 : 1.5}x ATR above entry` });
 
     if (swingHigh > 0) {
       slCandidates.push({ price: swingHigh + atr * 0.1, reason: `Above swing high (${swingHigh.toFixed(decimals)}) + buffer` });
@@ -476,7 +476,7 @@ export function calculateExitManagement(params: {
   tp3?: number;
   isBuy: boolean;
   pair: string;
-  mode: 'scalping' | 'daytrading' | 'swing';
+  mode: 'scalping' | 'daytrading' | 'swing' | 'fundednext';
 }): ExitManagement {
   const { entry, sl, tp1, tp2, tp3, isBuy, pair, mode } = params;
   const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
@@ -494,7 +494,7 @@ export function calculateExitManagement(params: {
   const tp2Distance = Math.abs(tp2 - entry);
   const trailingSteps: ExitManagement['trailingStopSteps'] = [];
 
-  const steps = mode === 'scalping' ? 2 : mode === 'daytrading' ? 3 : 4;
+  const steps = mode === 'scalping' ? 2 : mode === 'daytrading' ? 3 : mode === 'fundednext' ? 4 : 4;
   for (let i = 1; i <= steps; i++) {
     const fraction = i / (steps + 1);
     const triggerDist = tp1Distance + (tp2Distance - tp1Distance) * fraction;
@@ -534,6 +534,19 @@ export function calculateExitManagement(params: {
   }
   if (pair === 'XAU/USD') {
     exitRules.push(`⚠️ Gold can have sharp reversals — always lock in 50% at TP1`);
+  }
+
+  // FundedNext-specific rules
+  if (mode === 'fundednext') {
+    exitRules.push(`🏆 FUNDEDNEXT 6K RULES:`);
+    exitRules.push(`• Max risk per trade: 1% ($60) — SL must not exceed $60 risk`);
+    exitRules.push(`• Daily loss limit: 5% ($300) — if down $200+, STOP trading`);
+    exitRules.push(`• Max loss limit: 10% ($600) — total drawdown cannot exceed this`);
+    exitRules.push(`• Phase 1 target: 8% ($480 profit) — be patient, quality over quantity`);
+    exitRules.push(`• Phase 2 target: 5% ($300 profit) — same discipline`);
+    exitRules.push(`• Minimum 5 trading days — don't rush, one good trade per day is enough`);
+    exitRules.push(`• NEVER trade high-impact news — prop firms will breach your account`);
+    exitRules.push(`• After 2 consecutive losses → 4-hour break (avoid revenge trading)`);
   }
 
   return {

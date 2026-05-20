@@ -379,7 +379,7 @@ PROFESSIONAL QUALITY GATE:
             pair,
             swingHigh: trendAnalysis.lastSwingHigh,
             swingLow: trendAnalysis.lastSwingLow,
-            mode: mode as 'scalping' | 'daytrading' | 'swing',
+            mode: mode as 'scalping' | 'daytrading' | 'swing' | 'fundednext',
           });
 
           signal.sl = profSLTP.sl;
@@ -461,11 +461,22 @@ PROFESSIONAL QUALITY GATE:
           tp3: signal.tp3,
           isBuy: signal.type === 'BUY',
           pair,
-          mode: mode as 'scalping' | 'daytrading' | 'swing',
+          mode: mode as 'scalping' | 'daytrading' | 'swing' | 'fundednext',
         });
 
         // Add exit management instructions to the analysis (Multi-Level TP: 50/30/20)
-        const exitMgmtSummary = `\n\n📋 EXIT MANAGEMENT (Multi-Level TP):\n• TP1 (${signal.tp1}): Close 50% + Move SL to Breakeven (${exitMgmt.breakevenPrice})\n• TP2 (${signal.tp2}): Close 30% + Trail SL behind structure\n• TP3 (${signal.tp3}): Close remaining 20%\n• Early BE Trigger: ${exitMgmt.earlyBETrigger} (move SL to BE when price reaches this)\n• 🚨 NEVER let a winner turn into a loser!`;
+        let exitMgmtSummary = `\n\n📋 EXIT MANAGEMENT (Multi-Level TP):\n• TP1 (${signal.tp1}): Close 50% + Move SL to Breakeven (${exitMgmt.breakevenPrice})\n• TP2 (${signal.tp2}): Close 30% + Trail SL behind structure\n• TP3 (${signal.tp3}): Close remaining 20%\n• Early BE Trigger: ${exitMgmt.earlyBETrigger} (move SL to BE when price reaches this)\n• 🚨 NEVER let a winner turn into a loser!`;
+
+        // FundedNext-specific risk context
+        if (mode === 'fundednext') {
+          const slDistance = Math.abs(signal.sl - signal.entry);
+          const riskPct = ((slDistance / signal.entry) * 100).toFixed(2);
+          const riskDollar = (slDistance / signal.entry * 6000).toFixed(2);
+          exitMgmtSummary += `\n\n🏆 FUNDEDNEXT 6K STELLAR 2-STEP:\n• Risk per trade: ${riskPct}% ($${riskDollar} on $6K account)${parseFloat(riskDollar) > 60 ? ' ⚠️ EXCEEDS 1% LIMIT! Reduce position size!' : ' ✅ Within 1% limit'}`;
+          exitMgmtSummary += `\n• Daily Loss Limit: 5% ($300) | Max Loss: 10% ($600)`;
+          exitMgmtSummary += `\n• Phase 1 Target: 8% ($480) | Phase 2 Target: 5% ($300)`;
+          exitMgmtSummary += `\n• ${parseFloat(riskDollar) <= 60 ? '✅ Safe to trade with standard lot size' : '⚠️ Use MINI lot (0.01-0.05) to stay within 1% risk'}`;
+        }
         signal.analysis = (signal.analysis || '') + exitMgmtSummary;
 
         // ─── ADD PRICE DELAY WARNING ──
@@ -512,6 +523,12 @@ PROFESSIONAL QUALITY GATE:
           signal.analysis = `⚠️ السوق بدون اتجاه واضح — صفقة عالية المخاطر. لا تخاطر بأكثر من 0.5%. | ${signal.analysis || ''}`;
         } else if (trendAnalysis.strength < 50) {
           signal.analysis = `⚠️ الاتجاه ضعيف (${trendAnalysis.strength}%) — خفّض حجم الصفقة. | ${signal.analysis || ''}`;
+        }
+
+        // FundedNext: Extra warning for low confluence signals
+        if (mode === 'fundednext' && confluenceScore.total < 6) {
+          signal.analysis = `🏆⚠️ FUNDEDNEXT: Confluence is only ${confluenceScore.total}/12 — SKIP this trade. Only take signals with 6+ confluences to pass the challenge safely. | ${signal.analysis || ''}`;
+          signal.confidence = Math.min(signal.confidence, 40);
         }
       } catch {
         signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis, confluenceScore, detectedICT, detectedCandlestick, killZoneInfo);
@@ -618,6 +635,32 @@ function getModeConfig(mode: string, timeframe: string) {
 - MUST follow the trend direction — only trade with the trend`,
         atrMultiplier: 0.8,
       };
+    case 'fundednext':
+      return {
+        label: 'FundedNext 6K (Stellar 2-Step)',
+        promptRules: `- This is a FUNDEDNEXT STELLAR 2-STEP CHALLENGE signal on ${timeframe}
+- Account Size: $6,000 | Fee: $59.99 (refundable)
+- Phase 1 Profit Target: 8% ($480) | Phase 2 Profit Target: 5% ($300)
+- MAXIMUM Loss Limit: 10% ($600) — TOTAL account drawdown cannot exceed $600
+- DAILY Loss Limit: 5% ($300) — Cannot lose more than $300 in a single day
+- Minimum Trading Days: 5 | First Withdrawal: 21 Days
+- Performance Reward: Up to 95% | 15% from Challenge Phase
+
+CRITICAL RISK MANAGEMENT FOR FUNDEDNEXT:
+1. NEVER risk more than 1% of account ($60) per trade — this ensures you can take 5 losses before hitting daily limit
+2. SL MUST be placed at a logical level that limits risk to max $60 per trade
+3. Only take A+ and A signals (confluence score 8+/12) — skip B, C, F signals
+4. NEVER trade during high-impact news — prop firms monitor this
+5. NEVER hold over weekend if possible — gap risk can exceed daily loss limit
+6. Target minimum 1:2 R:R — need consistent wins to reach 8% target
+7. Focus on SWING trades (H4/D1) — less screen time, more reliable signals
+8. Best pairs for prop firm: XAU/USD, GBP/JPY, EUR/USD, GBP/USD — high liquidity
+9. Track daily P&L: if you're down $200+ today, STOP trading to protect daily limit
+10. After 2 consecutive losses, take a 4-hour break — avoid revenge trading
+- MUST follow the trend direction — counter-trend trades violate prop firm risk rules
+- This is for PASSING A PROPEL CHALLENGE — only take the BEST setups`,
+        atrMultiplier: 1.0,
+      };
     default: // swing
       return {
         label: 'Swing Trading',
@@ -661,7 +704,7 @@ function generateFallbackSignal(
   // NOTE: We don't have candles here in fallback, so we use the
   // market range as a fallback with BETTER multipliers
   const professionalRange = range > 0 ? range : currentPrice * 0.008;
-  const atrMult = mode === 'scalping' ? 0.6 : mode === 'daytrading' ? 0.8 : 1.0;
+  const atrMult = mode === 'scalping' ? 0.6 : mode === 'daytrading' ? 0.8 : mode === 'fundednext' ? 1.0 : 1.0;
   const atr = professionalRange * atrMult;
 
   const entry = currentPrice;
@@ -721,6 +764,12 @@ function generateFallbackSignal(
 
   // Step 3: Mode-specific adjustments
   if (mode === 'scalping') confidence = Math.max(confidence - 10, 20);
+  if (mode === 'fundednext') {
+    // FundedNext requires HIGHER confidence threshold — only A+ signals
+    if (confidence < 65) confidence = Math.max(confidence - 10, 20); // Lower confidence for non-A+ signals in funded mode
+    // Must have minimum 4 confluences for fundednext
+    if (trend.trendConfluence < 4) confidence = Math.min(confidence, 35);
+  }
 
   // Step 4: Clamp to professional range
   confidence = Math.max(20, Math.min(confidence, 92));

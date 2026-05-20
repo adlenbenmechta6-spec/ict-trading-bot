@@ -11,7 +11,7 @@ import dynamic from 'next/dynamic';
 const TradingViewChart = dynamic(() => import('@/components/TradingViewChart'), { ssr: false });
 
 // ─── Trading Modes & Timeframes ─────────────────────────────────────
-type TradingMode = 'swing' | 'daytrading' | 'scalping';
+type TradingMode = 'swing' | 'daytrading' | 'scalping' | 'fundednext';
 
 interface TradingModeConfig {
   id: TradingMode;
@@ -54,6 +54,16 @@ const TRADING_MODES: TradingModeConfig[] = [
     timeframes: ['M1', 'M5'],
     defaultTF: 'M5',
     holdTime: 'Sec - Min',
+  },
+  {
+    id: 'fundednext',
+    label: 'FundedNext 6K',
+    shortLabel: 'Funded',
+    emoji: '🏆',
+    description: 'Stellar 2-Step',
+    timeframes: ['H4', 'D1'],
+    defaultTF: 'H4',
+    holdTime: '1-7 days',
   },
 ];
 
@@ -148,6 +158,7 @@ const MODE_BADGE: Record<TradingMode, string> = {
   swing: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/20',
   daytrading: 'bg-blue-500/20 text-blue-300 border-blue-500/20',
   scalping: 'bg-orange-500/20 text-orange-300 border-orange-500/20',
+  fundednext: 'bg-purple-500/20 text-purple-300 border-purple-500/20',
 };
 
 // ─── Signal Card ─────────────────────────────────────────────────────
@@ -560,6 +571,7 @@ I combine two powerful methodologies:
 📅 Swing Trading — H4/D1 (1-7 days)
 📊 Day Trading — M15/M30/H1 (same day)
 ⚡ Scalping — M1/M5 (seconds-minutes)
+🏆 FundedNext 6K — Strict rules for prop firm challenge
 
 Choose your style in the header, then use the buttons below!
 ⚠️ Trading involves risk — these are educational analyses`,
@@ -768,6 +780,7 @@ export default function Home() {
       case 'swing': return `${base} bg-emerald-600/30 text-emerald-300 border-emerald-500/40 shadow-lg shadow-emerald-500/10`;
       case 'daytrading': return `${base} bg-blue-600/30 text-blue-300 border-blue-500/40 shadow-lg shadow-blue-500/10`;
       case 'scalping': return `${base} bg-orange-600/30 text-orange-300 border-orange-500/40 shadow-lg shadow-orange-500/10`;
+      case 'fundednext': return `${base} bg-purple-600/30 text-purple-300 border-purple-500/40 shadow-lg shadow-purple-500/10`;
     }
   };
 
@@ -779,6 +792,7 @@ export default function Home() {
       case 'swing': return `${base} bg-emerald-600/40 text-emerald-300`;
       case 'daytrading': return `${base} bg-blue-600/40 text-blue-300`;
       case 'scalping': return `${base} bg-orange-600/40 text-orange-300`;
+      case 'fundednext': return `${base} bg-purple-600/40 text-purple-300`;
     }
   };
 

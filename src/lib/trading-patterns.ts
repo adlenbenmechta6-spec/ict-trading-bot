@@ -410,34 +410,9 @@ export function detectAllPatterns(candles: Candle[]): PatternResult[] {
   return patterns;
 }
 
-// Generate simulated market data for demo purposes
-export function generateSimulatedCandles(count: number, basePrice: number, trend: 'up' | 'down' | 'sideways' = 'sideways'): Candle[] {
-  const candles: Candle[] = [];
-  let price = basePrice;
-
-  for (let i = 0; i < count; i++) {
-    const trendBias = trend === 'up' ? 0.002 : trend === 'down' ? -0.002 : 0;
-    const change = (Math.random() - 0.5 + trendBias) * basePrice * 0.02;
-    const open = price;
-    const close = open + change;
-    const high = Math.max(open, close) + Math.random() * basePrice * 0.005;
-    const low = Math.min(open, close) - Math.random() * basePrice * 0.005;
-    const volume = Math.floor(Math.random() * 10000) + 1000;
-
-    candles.push({
-      open: parseFloat(open.toFixed(5)),
-      high: parseFloat(high.toFixed(5)),
-      low: parseFloat(low.toFixed(5)),
-      close: parseFloat(close.toFixed(5)),
-      volume,
-      timestamp: Date.now() - (count - i) * 3600000,
-    });
-
-    price = close;
-  }
-
-  return candles;
-}
+// REMOVED: generateSimulatedCandles() — was using Math.random() which could inject
+// randomness into the signal pipeline. All data must come from real market sources.
+// Use fetchOHLCVData() from market-data.ts instead.
 
 // Calculate technical indicators
 export function calculateRSI(candles: Candle[], period: number = 14): number {
@@ -521,15 +496,26 @@ export function calculateBollingerBands(candles: Candle[], period: number = 20):
 export function calculateStochastic(candles: Candle[], period: number = 14): { k: number; d: number } {
   if (candles.length < period) return { k: 50, d: 50 };
 
-  const slice = candles.slice(-period);
-  const high = Math.max(...slice.map(c => c.high));
-  const low = Math.min(...slice.map(c => c.low));
-  const close = slice[slice.length - 1].close;
+  // Calculate %K values for the last 3 periods to compute real %D (3-period SMA of %K)
+  const kValues: number[] = [];
+  const lookback = Math.min(candles.length, period + 2); // Need at least 3 %K values
 
-  const k = high !== low ? ((close - low) / (high - low)) * 100 : 50;
+  for (let i = Math.max(period, lookback); i <= candles.length; i++) {
+    const slice = candles.slice(i - period, i);
+    const high = Math.max(...slice.map(c => c.high));
+    const low = Math.min(...slice.map(c => c.low));
+    const close = slice[slice.length - 1].close;
+    const kVal = high !== low ? ((close - low) / (high - low)) * 100 : 50;
+    kValues.push(kVal);
+  }
 
-  // Simplified %D
-  const d = k * 0.8 + 50 * 0.2;
+  const k = kValues.length > 0 ? kValues[kValues.length - 1] : 50;
+  // Real %D = 3-period SMA of %K values
+  const d = kValues.length >= 3
+    ? (kValues[kValues.length - 1] + kValues[kValues.length - 2] + kValues[kValues.length - 3]) / 3
+    : kValues.length >= 2
+    ? (kValues[kValues.length - 1] + kValues[kValues.length - 2]) / 2
+    : k;
 
   return {
     k: parseFloat(k.toFixed(1)),

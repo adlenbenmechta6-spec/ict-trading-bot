@@ -152,12 +152,25 @@ export function analyzeTrend(candles: OHLCVCandle[], currentPrice: number): Tren
   const voteDifference = Math.abs(bullishVotes - bearishVotes);
   const dominantVotes = Math.max(bullishVotes, bearishVotes);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // FIX v3: Structure-Trend Consistency Check
+  // If structure is LH/LL (bearish), trend CANNOT be bullish with high strength.
+  // If structure is HH/HL (bullish), trend CANNOT be bearish with high strength.
+  // This prevents the GBP/JPY bug where trend=bulish(95%) but structure=LH/LL
+  // ═══════════════════════════════════════════════════════════════════════
+  const structureContradictsBullish = structure === 'LH/LL' && bullishVotes > bearishVotes;
+  const structureContradictsBearish = structure === 'HH/HL' && bearishVotes > bullishVotes;
+
   if (bullishVotes > bearishVotes && bullishVotes >= 4 && voteDifference >= 2) {
     // Extra safety: if votes say bullish but price is clearly below both EMAs, revert to ranging
     if (clearlyBelowBoth) {
-      // Price below both EMAs = CANNOT be bullish, even if other indicators disagree
       direction = 'ranging';
       strength = 35;
+      trendConfluence = bullishVotes;
+    } else if (structureContradictsBullish) {
+      // FIX v3: Structure contradicts — downgrade to ranging with reduced strength
+      direction = 'ranging';
+      strength = Math.min(45, 30 + voteDifference * 3);
       trendConfluence = bullishVotes;
     } else {
       direction = 'bullish';
@@ -167,9 +180,13 @@ export function analyzeTrend(candles: OHLCVCandle[], currentPrice: number): Tren
   } else if (bearishVotes > bullishVotes && bearishVotes >= 4 && voteDifference >= 2) {
     // Extra safety: if votes say bearish but price is clearly above both EMAs, revert to ranging
     if (clearlyAboveBoth) {
-      // Price above both EMAs = CANNOT be bearish, even if other indicators disagree
       direction = 'ranging';
       strength = 35;
+      trendConfluence = bearishVotes;
+    } else if (structureContradictsBearish) {
+      // FIX v3: Structure contradicts — downgrade to ranging with reduced strength
+      direction = 'ranging';
+      strength = Math.min(45, 30 + voteDifference * 3);
       trendConfluence = bearishVotes;
     } else {
       direction = 'bearish';

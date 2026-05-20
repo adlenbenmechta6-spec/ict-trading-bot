@@ -443,6 +443,34 @@ PROFESSIONAL QUALITY GATE:
           signal.analysis = `${scalpingWarning} | ${signal.analysis || ''}`;
           signal.confidence = Math.min(signal.confidence, 45);
         }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // FIX v3: PROFESSIONAL QUALITY GATE — Trend Strength Gate
+        // If the trend is ranging with low strength, confidence MUST be low.
+        // Professional traders DON'T TRADE in ranging/weak markets.
+        // This prevents the AI from giving 60% confidence when trend=25%
+        // ═══════════════════════════════════════════════════════════════════
+        const maxConfByTrend = trendAnalysis.direction === 'ranging' && trendAnalysis.strength < 40
+          ? 35  // Weak ranging = max 35% — DO NOT TRADE
+          : trendAnalysis.direction === 'ranging'
+          ? 45  // Ranging but some strength = max 45% — risky
+          : trendAnalysis.strength < 50
+          ? 55  // Weak trend = max 55%
+          : 92; // Normal: no cap from trend side
+
+        if (signal.confidence > maxConfByTrend) {
+          console.warn(`[TREND QUALITY GATE] AI confidence ${signal.confidence}% capped to ${maxConfByTrend}% (trend: ${trendAnalysis.direction} ${trendAnalysis.strength}%)`);
+          signal.confidence = maxConfByTrend;
+        }
+
+        // Add quality warning to analysis for poor trend conditions
+        if (trendAnalysis.direction === 'ranging' && trendAnalysis.strength < 40) {
+          signal.analysis = `🔴 لا تتداول! السوق متردد وضعيف (${trendAnalysis.strength}%). الاحترافيون ينتظرون اتجاه واضح. | ${signal.analysis || ''}`;
+        } else if (trendAnalysis.direction === 'ranging') {
+          signal.analysis = `⚠️ السوق بدون اتجاه واضح — صفقة عالية المخاطر. لا تخاطر بأكثر من 0.5%. | ${signal.analysis || ''}`;
+        } else if (trendAnalysis.strength < 50) {
+          signal.analysis = `⚠️ الاتجاه ضعيف (${trendAnalysis.strength}%) — خفّض حجم الصفقة. | ${signal.analysis || ''}`;
+        }
       } catch {
         signal = generateFallbackSignal(pair, timeframe, currentPrice, { high: dayHigh, low: dayLow, change: marketData.change, changePercent }, aiResponse, mode, trendAnalysis, confluenceScore, detectedICT, detectedCandlestick, killZoneInfo);
       }
@@ -597,18 +625,60 @@ function generateFallbackSignal(
   const sl = isBuy ? entry - slDist : entry + slDist;
   const rr = Math.abs(tp1 - entry) / Math.abs(sl - entry);
 
-  // Confidence now boosted when trend is strong (following trend = higher probability)
-  let confidence = 55;
-  if (trend.direction !== 'ranging') {
-    confidence += Math.round(trend.strength * 0.2); // Strong trend = higher confidence
+  // ═══════════════════════════════════════════════════════════════════════
+  // FIX v3: Professional Confidence Calculation
+  // Confidence MUST reflect the REAL quality of the analysis:
+  // - Ranging market with low confluence = VERY LOW confidence (max 35%)
+  // - Weak trend with some confluence = MODERATE (40-55%)
+  // - Strong trend with high confluence = HIGH (60-85%)
+  // - A+ setup with all confluences = VERY HIGH (85-95%)
+  // This prevents the bug where ranging/25%/2-7 confluence got 60% confidence
+  // ═══════════════════════════════════════════════════════════════════════
+  let confidence = 40; // Base: cautious
+  let qualityWarning = '';
+
+  // Step 1: Base confidence from trend strength and direction
+  if (trend.direction === 'ranging' && trend.strength < 40) {
+    // Ranging/weak market = professional traders DON'T TRADE
+    confidence = 25 + Math.round(trend.strength * 0.15); // 25-31%
+    qualityWarning = '⚠️ السوق متردد وضعيف — لا تتداول في هذه الظروف! الاحترافيون ينتظرون اتجاه واضح.';
+  } else if (trend.direction === 'ranging') {
+    // Ranging but some strength (40-60%) = risky
+    confidence = 30 + Math.round(trend.strength * 0.2); // 30-42%
+    qualityWarning = '⚠️ السوق بدون اتجاه واضح — صفقة عالية المخاطر. لا تخاطر بأكثر من 0.5%.';
+  } else if (trend.strength >= 70) {
+    // Strong trend = professional quality
+    confidence = 60 + Math.round((trend.strength - 70) * 0.5); // 60-75%
+  } else if (trend.strength >= 50) {
+    // Moderate trend = acceptable
+    confidence = 50 + Math.round((trend.strength - 50) * 0.5); // 50-60%
+  } else {
+    // Weak trend (below 50%) = low quality
+    confidence = 40 + Math.round(trend.strength * 0.15); // 40-48%
+    qualityWarning = '⚠️ الاتجاه ضعيف — صفقة محفوفة بالمخاطر. خفّض حجم الصفقة.';
   }
-  if (trend.trendConfluence >= 4) confidence += 10; // Multiple indicators agree
-  if (trend.trendConfluence >= 3) confidence += 5;
-  // Lower confidence in ranging markets
-  if (trend.direction === 'ranging') confidence = Math.max(confidence - 10, 40);
-  // Scalping has lower confidence due to noise
-  if (mode === 'scalping') confidence = Math.max(confidence - 5, 40);
-  confidence = Math.min(confidence, 92);
+
+  // Step 2: Adjust for confluence (more confirmations = higher confidence)
+  if (trend.trendConfluence >= 6) confidence += 15;
+  else if (trend.trendConfluence >= 5) confidence += 10;
+  else if (trend.trendConfluence >= 4) confidence += 5;
+  else if (trend.trendConfluence <= 2) {
+    confidence -= 15; // Very few confirmations = big penalty
+    if (!qualityWarning) qualityWarning = '⚠️ عدد التأكيدات قليل جداً — لا يوجد ما يكفي لدعم هذه الصفقة.';
+  }
+  else if (trend.trendConfluence <= 3) confidence -= 5;
+
+  // Step 3: Mode-specific adjustments
+  if (mode === 'scalping') confidence = Math.max(confidence - 10, 20);
+
+  // Step 4: Clamp to professional range
+  confidence = Math.max(20, Math.min(confidence, 92));
+
+  // Step 5: Override confluence score cap (from professional rules)
+  const maxConfByConfluence = confluenceScore.tier === 'A+' ? 95 : confluenceScore.tier === 'A' ? 85 : confluenceScore.tier === 'B' ? 75 : confluenceScore.tier === 'C' ? 55 : 40;
+  if (confidence > maxConfByConfluence) {
+    confidence = maxConfByConfluence;
+  }
 
   // Use real RSI from trend analysis
   const rsi = Math.round(trend.rsi);
@@ -698,6 +768,14 @@ function generateFallbackSignal(
       : `${smcSetup} (Trend-Following)`;
     ictElements = realICTElements;
     analysis = aiText || `📅 SWING ${isBuy ? '🟢 BUY' : '🔴 SELL'} ${pair} at ${formatPrice(pair, entry)} (${timeframe}). Market is in ${trendLabel} (${trend.strength}% strength, ${trend.structure}). Confluence grade: ${confGrade} (${confScore}/12). ${realICTElements.length > 0 ? 'Detected: ' + realICTElements.slice(0,5).join(', ') + '.' : 'No specific ICT patterns detected — relying on trend direction.'} R:R ${rr.toFixed(1)}:1. Risk max 2%. The market hardly reverses without taking liquidity!`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FIX v3: Add quality warning to analysis if conditions are poor
+  // Professional traders DON'T TRADE in poor conditions — neither should the bot
+  // ═══════════════════════════════════════════════════════════════════════
+  if (qualityWarning) {
+    analysis = `${qualityWarning} | ${analysis}`;
   }
 
   return {

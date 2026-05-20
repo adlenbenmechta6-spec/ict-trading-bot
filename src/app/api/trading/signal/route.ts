@@ -128,6 +128,7 @@ export async function POST(req: NextRequest) {
     let detectedCandlestick: ReturnType<typeof detectAllPatterns> = [];
     let pdZones: ReturnType<typeof calculatePDZones> | null = null;
     let actualMACD: ReturnType<typeof calculateMACD> | null = null;
+    let exitMgmt: ReturnType<typeof calculateExitManagement> | null = null;
     let actualBB: ReturnType<typeof calculateBollingerBands> | null = null;
     let actualStoch: ReturnType<typeof calculateStochastic> | null = null;
 
@@ -412,7 +413,7 @@ PROFESSIONAL QUALITY GATE:
 
         // ─── EXIT MANAGEMENT: Calculate breakeven + trailing stop rules ──
         // This prevents winning trades from turning into losers
-        const exitMgmt = calculateExitManagement({
+        exitMgmt = calculateExitManagement({
           entry: signal.entry,
           sl: signal.sl,
           tp1: signal.tp1,

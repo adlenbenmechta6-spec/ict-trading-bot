@@ -1,14 +1,15 @@
 // Real Market Data Service - Multi-source price & OHLCV fetching
 // Supports multiple timeframes: M1, M5, M15, M30, H1, H4, D1
-// Priority: Binance Futures (REAL-TIME, free, no API key) → TradingView → Twelve Data → Finnhub → Yahoo Finance (delayed) → Fallback
+// Priority: CoinGecko (cloud-friendly!) → Binance Futures → Bybit → OKX → TradingView → Twelve Data → Finnhub → ER-API → Yahoo Finance (delayed) → Fallback
 //
 // Key fix: H4 candles are now PROPERLY AGGREGATED from 1h candles
 // (Yahoo Finance doesn't have a 4h interval, so we fetch 1h and combine)
 //
-// CRITICAL v3: Binance Futures API is now PRIMARY source for commodities (XAG/USD, XAU/USD)
-// and crypto (BTC/USD, ETH/USD) because it's FREE, REAL-TIME, and needs NO API KEY.
-// Twelve Data free plan does NOT support XAG/USD (requires paid plan), so Binance is essential.
-// For forex pairs: Twelve Data + TradingView are primary.
+// CRITICAL v4: CoinGecko is now PRIMARY for commodities (XAG/USD, XAU/USD)
+// and crypto (BTC/USD, ETH/USD). Unlike Binance/Bybit/OKX which get BLOCKED
+// on Vercel data center IPs, CoinGecko works from cloud environments.
+// CoinGecko uses tokenized precious metals (Kinesis Silver for XAG, Tether Gold for XAU).
+// For forex pairs: Twelve Data + ExchangeRate API are primary.
 // Yahoo Finance is LAST resort because it returns 15-20min delayed data for commodities.
 // Price cross-validation: Compare multiple sources and flag stale data
 
@@ -168,7 +169,7 @@ function isValidPrice(pair: string, price: number): boolean {
     'EUR/USD': [0.9, 1.3],
     'GBP/USD': [1.1, 1.5],
     'USD/JPY': [100, 200],
-    'XAU/USD': [2000, 8000],
+    'XAU/USD': [2000, 10000],
     'XAG/USD': [20, 150],
     'BTC/USD': [20000, 200000],
     'ETH/USD': [500, 10000],
@@ -671,25 +672,28 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
   // Fetch from all available real-time sources IN PARALLEL, not sequential!
   // Sequential fetch was causing timeouts on Vercel because Binance would
   // take 8s to timeout before trying Bybit/OKX.
-  const isCryptoPair = BINANCE_FUTURES_SYMBOLS[pair] || BYBIT_SYMBOLS[pair] || OKX_SYMBOLS[pair];
+  const isCryptoOrCommodity = BINANCE_FUTURES_SYMBOLS[pair] || BYBIT_SYMBOLS[pair] || OKX_SYMBOLS[pair] || COINGECKO_ID_MAP[pair];
 
-  if (isCryptoPair) {
-    // Fetch Binance + Bybit + OKX OHLCV in parallel for commodities/crypto
-    console.log(`[OHLCV FETCH] Fetching ${pair} ${timeframe} from Binance/Bybit/OKX in parallel...`);
-    const [binanceResult, bybitResult, okxResult] = await Promise.allSettled([
+  if (isCryptoOrCommodity) {
+    // Fetch Binance + Bybit + OKX + CoinGecko OHLCV in parallel for commodities/crypto
+    // CRITICAL v4: CoinGecko added because it works from Vercel cloud IPs
+    console.log(`[OHLCV FETCH] Fetching ${pair} ${timeframe} from Binance/Bybit/OKX/CoinGecko in parallel...`);
+    const [binanceResult, bybitResult, okxResult, coinGeckoResult] = await Promise.allSettled([
       fetchOHLCVFromBinance(pair, timeframe),
       fetchOHLCVFromBybit(pair, timeframe),
       fetchOHLCVFromOKX(pair, timeframe),
+      fetchOHLCVFromCoinGecko(pair, timeframe),
     ]);
 
     const binanceOHLCV = binanceResult.status === 'fulfilled' ? binanceResult.value : null;
     const bybitOHLCV = bybitResult.status === 'fulfilled' ? bybitResult.value : null;
     const okxOHLCV = okxResult.status === 'fulfilled' ? okxResult.value : null;
+    const coinGeckoOHLCV = coinGeckoResult.status === 'fulfilled' ? coinGeckoResult.value : null;
 
-    // Use the first available real-time source (priority: Binance > Bybit > OKX)
-    const ohlcvResult = binanceOHLCV || bybitOHLCV || okxOHLCV;
+    // Use the first available real-time source (priority: Binance > Bybit > OKX > CoinGecko)
+    const ohlcvResult = binanceOHLCV || bybitOHLCV || okxOHLCV || coinGeckoOHLCV;
     if (ohlcvResult) {
-      const sourceName = binanceOHLCV ? 'Binance' : bybitOHLCV ? 'Bybit' : 'OKX';
+      const sourceName = binanceOHLCV ? 'Binance' : bybitOHLCV ? 'Bybit' : okxOHLCV ? 'OKX' : 'CoinGecko';
       console.log(`[OHLCV FETCH] ${pair} ${timeframe}: Using ${sourceName} (Real-time), ${ohlcvResult.candles.length} candles`);
       ohlcvCache[cacheKey] = { data: ohlcvResult, expiry: Date.now() + OHLCV_CACHE_TTL };
       return ohlcvResult;
@@ -817,12 +821,12 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
 
 // Generate fallback OHLCV data when API fails
 function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
-  // Use realistic base prices (updated May 2025)
+  // Use realistic base prices (updated May 2026)
   const basePrices: Record<string, number> = {
-    'EUR/USD': 1.13500, 'GBP/USD': 1.27000, 'USD/JPY': 145.50,
-    'XAU/USD': 3350.00, 'XAG/USD': 78.00, 'BTC/USD': 77000, 'ETH/USD': 2100,
+    'EUR/USD': 1.16200, 'GBP/USD': 1.34400, 'USD/JPY': 159.00,
+    'XAU/USD': 4547.00, 'XAG/USD': 78.00, 'BTC/USD': 77000, 'ETH/USD': 2100,
     'US30': 42000, 'NAS100': 19500, 'US500': 5900,
-    'GBP/JPY': 197.80, 'AUD/USD': 0.64500,
+    'GBP/JPY': 213.70, 'AUD/USD': 0.64500,
   };
 
   const currentPrice = basePrices[pair] || 1.0;
@@ -1289,6 +1293,204 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
   }
 }
 
+// ─── COINGECKO: Cloud-friendly real-time source ─────────────────────────
+// CoinGecko API works from cloud/data center IPs (unlike Binance/Bybit/OKX
+// which are often blocked on Vercel serverless functions).
+// Uses tokenized precious metals (Kinesis Silver, Tether Gold) for XAG/XAU prices.
+// Free tier: ~10-30 calls/min, no API key needed.
+const COINGECKO_ID_MAP: Record<string, { id: string; name: string; type: string }> = {
+  'XAG/USD': { id: 'kinesis-silver', name: 'Kinesis Silver (XAG)', type: 'commodity' },
+  'XAU/USD': { id: 'tether-gold', name: 'Tether Gold (XAU)', type: 'commodity' },
+  'BTC/USD': { id: 'bitcoin', name: 'Bitcoin', type: 'crypto' },
+  'ETH/USD': { id: 'ethereum', name: 'Ethereum', type: 'crypto' },
+};
+
+async function fetchFromCoinGecko(pair: string): Promise<MarketData | null> {
+  const coinConfig = COINGECKO_ID_MAP[pair];
+  if (!coinConfig) return null;
+
+  try {
+    // Use the coin detail endpoint to get price + 24h high/low/change
+    const url = `https://api.coingecko.com/api/v3/coins/${coinConfig.id}`;
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      console.warn(`CoinGecko returned ${response.status} for ${pair} (${coinConfig.id})`);
+      return null;
+    }
+
+    const data = await response.json();
+    const md = data?.market_data;
+    if (!md) {
+      console.warn(`CoinGecko: no market_data for ${pair}`);
+      return null;
+    }
+
+    const price = md.current_price?.usd;
+    if (!price || isNaN(price) || price <= 0 || !isValidPrice(pair, price)) {
+      console.warn(`CoinGecko: invalid price for ${pair}: ${price}`);
+      return null;
+    }
+
+    const high = md.high_24h?.usd;
+    const low = md.low_24h?.usd;
+    const changePercent = md.price_change_percentage_24h || 0;
+    const prevPrice = price / (1 + changePercent / 100);
+    const change = price - prevPrice;
+
+    console.log(`[COINGECKO] ${pair} (${coinConfig.id}): price=${price}, change=${changePercent.toFixed(2)}%, high=${high}, low=${low}`);
+
+    return buildMarketData(pair, price, `CoinGecko (${coinConfig.name})`, {
+      high: high && !isNaN(high) && high > 0 ? high : undefined,
+      low: low && !isNaN(low) && low > 0 ? low : undefined,
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      delay: 'Real-time',
+      priceQuality: 'realtime',
+      delayMinutes: 0,
+    });
+  } catch (error) {
+    console.error(`CoinGecko fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
+// ─── COINGECKO: Real-Time OHLCV Fetcher ─────────────────────────────────
+// CoinGecko OHLCV endpoint returns candles in [timestamp, open, high, low, close] format.
+// Days parameter controls candle granularity:
+//   days=1 → 30min candles, days=7-30 → 4h candles, days=90+ → daily candles
+// This works from Vercel cloud IPs, unlike Binance/Bybit/OKX which get blocked.
+async function fetchOHLCVFromCoinGecko(pair: string, timeframe: string): Promise<OHLCVData | null> {
+  const coinConfig = COINGECKO_ID_MAP[pair];
+  if (!coinConfig) return null;
+
+  try {
+    // Map our timeframes to CoinGecko days parameter
+    let days: number;
+    if (['M1', 'M5', 'M15', 'M30'].includes(timeframe)) {
+      days = 1;  // 30min candles
+    } else if (['H1', 'H4'].includes(timeframe)) {
+      days = 7;  // 4h candles (CoinGecko returns 4h candles for days=7)
+    } else {
+      days = 90; // daily candles
+    }
+
+    const url = `https://api.coingecko.com/api/v3/coins/${coinConfig.id}/ohlc?vs_currency=usd&days=${days}`;
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      console.warn(`CoinGecko OHLCV returned ${response.status} for ${pair} ${timeframe}`);
+      return null;
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length < 5) {
+      console.warn(`CoinGecko: insufficient OHLCV data for ${pair} ${timeframe}`);
+      return null;
+    }
+
+    // CoinGecko format: [timestamp_ms, open, high, low, close]
+    const candles: OHLCVCandle[] = [];
+    for (const k of data) {
+      const ts = k[0];
+      const o = parseFloat(k[1]);
+      const h = parseFloat(k[2]);
+      const l = parseFloat(k[3]);
+      const c = parseFloat(k[4]);
+      if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(c)) continue;
+      candles.push({
+        timestamp: ts,
+        open: o, high: h, low: l, close: c, volume: 0, // CoinGecko OHLCV doesn't include volume
+      });
+    }
+
+    if (candles.length < 5) return null;
+
+    candles.sort((a, b) => a.timestamp - b.timestamp);
+    const currentPrice = candles[candles.length - 1].close;
+    if (!isValidPrice(pair, currentPrice)) return null;
+
+    const dayHigh = Math.max(...candles.slice(-6).map(c => c.high));
+    const dayLow = Math.min(...candles.slice(-6).map(c => c.low));
+    const prevClose = candles.length > 1 ? candles[candles.length - 2].close : currentPrice;
+    const change = currentPrice - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    console.log(`[COINGECKO OHLCV] ${pair} ${timeframe}: ${candles.length} candles, price=${currentPrice}`);
+
+    return {
+      pair, timeframe, candles,
+      currentPrice, dayHigh, dayLow,
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      source: `CoinGecko (${coinConfig.name})`,
+      delay: 'Real-time',
+      priceQuality: 'realtime',
+      delayMinutes: 0,
+    };
+  } catch (error) {
+    console.error(`CoinGecko OHLCV failed for ${pair} ${timeframe}:`, error);
+    return null;
+  }
+}
+
+// ─── OPEN ER-API: Cloud-friendly forex rates ──────────────────────────
+// Free, no API key, works from cloud IPs. Updated daily (not real-time but
+// much better than nothing when other sources fail).
+// Only used as LAST RESORT for forex pairs.
+async function fetchFromOpenERAPI(pair: string): Promise<MarketData | null> {
+  // Only support USD-quote forex pairs
+  const FOREX_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'NZD/USD',
+    'USD/CAD', 'USD/CHF', 'GBP/JPY', 'EUR/GBP'];
+  if (!FOREX_PAIRS.includes(pair)) return null;
+
+  try {
+    const url = `https://open.er-api.com/v6/latest/USD`;
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data?.result !== 'success' || !data?.rates) return null;
+
+    const rates = data.rates;
+    let price: number;
+
+    if (pair === 'USD/JPY') price = rates.JPY;
+    else if (pair === 'USD/CAD') price = rates.CAD;
+    else if (pair === 'USD/CHF') price = rates.CHF;
+    else if (pair === 'GBP/JPY') price = (rates.GBP / rates.USD) * rates.JPY; // Cross rate
+    else if (pair === 'EUR/GBP') price = rates.EUR / rates.GBP;
+    else price = rates[pair.split('/')[0]]; // EUR/USD -> rates.EUR
+
+    if (!price || isNaN(price) || !isValidPrice(pair, price)) return null;
+
+    console.log(`[ER-API] ${pair}: price=${price} (daily updated)`);
+
+    return buildMarketData(pair, price, 'ExchangeRate API (daily)', {
+      change: 0,
+      changePercent: 0,
+      delay: 'Daily updated',
+      priceQuality: 'near-realtime',
+      delayMinutes: 60,
+    });
+  } catch (error) {
+    console.error(`ER-API fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
 // ─── MAIN PRICE FETCH: Multi-source parallel fetch with Binance as PRIMARY ──
 export async function fetchRealPrice(pair: string): Promise<MarketData> {
   // Check cache first (15 second TTL for fresher prices)
@@ -1298,46 +1500,55 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
   }
 
   // ─── MULTI-SOURCE PARALLEL FETCH ────────────────────────────────────
-  // Fetch from ALL 7 sources in parallel, then pick the best
-  // Priority: Binance → Bybit → OKX → TradingView → Twelve Data → Finnhub → Yahoo Finance
-  // CRITICAL FIX: Bybit and OKX added as backups when Binance is blocked on Vercel
-  console.log(`[PRICE FETCH] Fetching ${pair} from all 7 sources in parallel...`);
+  // Fetch from ALL 9 sources in parallel, then pick the best
+  // Priority: CoinGecko → Binance → Bybit → OKX → TradingView → Twelve Data → Finnhub → ER-API → Yahoo Finance
+  // CRITICAL FIX v4: CoinGecko added as PRIMARY for commodities because it works from
+  // Vercel cloud IPs (Binance/Bybit/OKX are often BLOCKED on Vercel data center IPs)
+  console.log(`[PRICE FETCH] Fetching ${pair} from all 9 sources in parallel...`);
 
-  const [binanceResult, bybitResult, okxResult, tradingViewResult, twelveDataResult, finnhubResult, yahooResult] = await Promise.allSettled([
-    fetchFromBinance(pair),        // Priority 0: Binance Futures (FREE, real-time, commodities/crypto)
-    fetchFromBybit(pair),          // Priority 0.5: Bybit (FREE, real-time — backup when Binance blocked)
-    fetchFromOKX(pair),            // Priority 0.7: OKX (FREE, real-time — second backup)
+  const [coinGeckoResult, binanceResult, bybitResult, okxResult, tradingViewResult, twelveDataResult, finnhubResult, erApiResult, yahooResult] = await Promise.allSettled([
+    fetchFromCoinGecko(pair),       // Priority 0: CoinGecko (works from cloud IPs! commodities/crypto)
+    fetchFromBinance(pair),        // Priority 0.1: Binance Futures (blocked on Vercel but works locally)
+    fetchFromBybit(pair),          // Priority 0.5: Bybit (may be blocked on Vercel)
+    fetchFromOKX(pair),            // Priority 0.7: OKX (may be blocked on Vercel)
     fetchFromTradingView(pair),     // Priority 1: TradingView scanner
     fetchFromTwelveData(pair),      // Priority 2: Twelve Data (forex, ETFs)
     fetchFromFinnhub(pair),         // Priority 3: Finnhub
+    fetchFromOpenERAPI(pair),       // Priority 3.5: ExchangeRate API (daily forex — cloud friendly)
     fetchFromYahooFinance(pair),    // Priority 4: Yahoo Finance (DELAYED last resort)
   ]);
 
+  const coinGecko = coinGeckoResult.status === 'fulfilled' ? coinGeckoResult.value : null;
   const binance = binanceResult.status === 'fulfilled' ? binanceResult.value : null;
   const bybit = bybitResult.status === 'fulfilled' ? bybitResult.value : null;
   const okx = okxResult.status === 'fulfilled' ? okxResult.value : null;
   const tradingView = tradingViewResult.status === 'fulfilled' ? tradingViewResult.value : null;
   const twelveData = twelveDataResult.status === 'fulfilled' ? twelveDataResult.value : null;
   const finnhub = finnhubResult.status === 'fulfilled' ? finnhubResult.value : null;
+  const erApi = erApiResult.status === 'fulfilled' ? erApiResult.value : null;
   const yahooData = yahooResult.status === 'fulfilled' ? yahooResult.value : null;
 
   // Collect all successful real-time sources with priorities
   const realtimeSources: Array<{ data: MarketData; priority: number }> = [];
-  if (binance) realtimeSources.push({ data: binance, priority: 0 });      // Binance is #1 for commodities
+  if (coinGecko) realtimeSources.push({ data: coinGecko, priority: 0 });   // CoinGecko #1 — works from Vercel!
+  if (binance) realtimeSources.push({ data: binance, priority: 0.1 });     // Binance is great when it works
   if (bybit) realtimeSources.push({ data: bybit, priority: 0.5 });        // Bybit is #1.5 — key backup!
   if (okx) realtimeSources.push({ data: okx, priority: 0.7 });           // OKX is #1.7 — second backup
   if (tradingView) realtimeSources.push({ data: tradingView, priority: 1 });
   if (twelveData) realtimeSources.push({ data: twelveData, priority: 2 });
   if (finnhub) realtimeSources.push({ data: finnhub, priority: 3 });
+  if (erApi) realtimeSources.push({ data: erApi, priority: 3.5 });        // Daily rates — cloud friendly
 
   // Log all source prices for debugging
   const sourceLog = [
+    coinGecko ? `CG=${coinGecko.price}` : 'CG=FAIL',
     binance ? `BIN=${binance.price}` : 'BIN=FAIL',
     bybit ? `BYB=${bybit.price}` : 'BYB=FAIL',
     okx ? `OKX=${okx.price}` : 'OKX=FAIL',
     tradingView ? `TV=${tradingView.price}` : 'TV=FAIL',
     twelveData ? `12D=${twelveData.price}` : '12D=FAIL',
     finnhub ? `FH=${finnhub.price}` : 'FH=SKIP',
+    erApi ? `ER=${erApi.price}` : 'ER=FAIL',
     yahooData ? `YF=${yahooData.price}` : 'YF=FAIL',
   ].join(' | ');
   console.log(`[PRICE SOURCES] ${pair}: ${sourceLog}`);

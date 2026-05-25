@@ -74,3 +74,32 @@ Stage Summary:
 - XAG/USD: 76.199 -> 78.03 (REAL-TIME)
 - Price Quality: delayed -> realtime
 
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix XAG/USD price delay issue (showing 76.199 instead of ~78)
+
+Work Log:
+- Analyzed market-data.ts and signal/route.ts code
+- Discovered that Binance/Bybit/OKX APIs are BLOCKED on Vercel data center IPs
+- All real-time sources fail on Vercel → falls back to Yahoo Finance (15-20 min delayed)
+- Yahoo Finance returns XAG/USD = 76.199 (delayed) vs real-time ~78
+- Added CoinGecko API as PRIMARY source (works from cloud IPs!)
+- Added ExchangeRate API as forex backup
+- Added CoinGecko OHLCV for candle data
+- Implemented rate limit fallback (detail endpoint → simple/price endpoint)
+- Updated price validation ranges (XAU/USD now up to 10000)
+- Updated fallback base prices (XAU/USD ~4547, EUR/USD ~1.162)
+- Updated health check to test all 9 price sources
+- Tested locally: CoinGecko returns XAG/USD = 77.95 (real-time)
+- Tested signal generation: Entry price = 77.512 (multi-source average) ✅
+- Yahoo Finance still returns 76.199 (delayed) ⚠️
+- Pushed to GitHub (commit acd9d32 and 21519d1)
+
+Stage Summary:
+- Price fix verified working locally
+- Code pushed to GitHub main branch
+- Vercel token is expired (vcp_66ynRNlIrilThN2cD6uUukjLwQgBxtQb9VmmlDeOzeAUdOte52ZHjpJ)
+- Need user to re-authorize Vercel deployment or provide new token
+- Production URL needs verification

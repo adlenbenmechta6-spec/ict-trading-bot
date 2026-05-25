@@ -58,3 +58,19 @@ Stage Summary:
 - All pairs now show "realtime" quality from TradingView + Twelve Data
 - Signal direction now correct: SELL with SL > Entry > TP
 - Deployed to Vercel: https://my-project-seven-nu-33.vercel.app
+
+---
+Task ID: price-delay-fix
+Agent: Main Agent
+Task: Fix price data DELAY - XAG/USD showing 76.199 instead of real ~78
+
+Work Log:
+- Added Bybit + OKX as real-time backup APIs
+- Changed to 7-source parallel fetch
+- Fixed OHLCV last candle with real-time price
+- Deployed to Vercel
+
+Stage Summary:
+- XAG/USD: 76.199 -> 78.03 (REAL-TIME)
+- Price Quality: delayed -> realtime
+

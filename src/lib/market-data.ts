@@ -667,38 +667,47 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
     return cached.data;
   }
 
-  // Strategy 0: Binance Futures (REAL-TIME — PRIMARY source for commodities & crypto)
-  if (BINANCE_FUTURES_SYMBOLS[pair]) {
-    const binanceOHLCV = await fetchOHLCVFromBinance(pair, timeframe);
-    if (binanceOHLCV) {
-      ohlcvCache[cacheKey] = { data: binanceOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
-      return binanceOHLCV;
-    }
-  }
+  // ─── PARALLEL OHLCV FETCH ──────────────────────────────────────────
+  // Fetch from all available real-time sources IN PARALLEL, not sequential!
+  // Sequential fetch was causing timeouts on Vercel because Binance would
+  // take 8s to timeout before trying Bybit/OKX.
+  const isCryptoPair = BINANCE_FUTURES_SYMBOLS[pair] || BYBIT_SYMBOLS[pair] || OKX_SYMBOLS[pair];
 
-  // Strategy 0.5: Bybit (REAL-TIME — backup when Binance is blocked on Vercel)
-  if (BYBIT_SYMBOLS[pair]) {
-    const bybitOHLCV = await fetchOHLCVFromBybit(pair, timeframe);
-    if (bybitOHLCV) {
-      ohlcvCache[cacheKey] = { data: bybitOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
-      return bybitOHLCV;
-    }
-  }
+  if (isCryptoPair) {
+    // Fetch Binance + Bybit + OKX OHLCV in parallel for commodities/crypto
+    console.log(`[OHLCV FETCH] Fetching ${pair} ${timeframe} from Binance/Bybit/OKX in parallel...`);
+    const [binanceResult, bybitResult, okxResult] = await Promise.allSettled([
+      fetchOHLCVFromBinance(pair, timeframe),
+      fetchOHLCVFromBybit(pair, timeframe),
+      fetchOHLCVFromOKX(pair, timeframe),
+    ]);
 
-  // Strategy 0.7: OKX (REAL-TIME — second backup)
-  if (OKX_SYMBOLS[pair]) {
-    const okxOHLCV = await fetchOHLCVFromOKX(pair, timeframe);
-    if (okxOHLCV) {
-      ohlcvCache[cacheKey] = { data: okxOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
-      return okxOHLCV;
-    }
-  }
+    const binanceOHLCV = binanceResult.status === 'fulfilled' ? binanceResult.value : null;
+    const bybitOHLCV = bybitResult.status === 'fulfilled' ? bybitResult.value : null;
+    const okxOHLCV = okxResult.status === 'fulfilled' ? okxResult.value : null;
 
-  // Strategy 1: Twelve Data (REAL-TIME — PRIMARY source for forex)
-  const twelveOHLCV = await fetchOHLCVFromTwelveData(pair, timeframe);
-  if (twelveOHLCV) {
-    ohlcvCache[cacheKey] = { data: twelveOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
-    return twelveOHLCV;
+    // Use the first available real-time source (priority: Binance > Bybit > OKX)
+    const ohlcvResult = binanceOHLCV || bybitOHLCV || okxOHLCV;
+    if (ohlcvResult) {
+      const sourceName = binanceOHLCV ? 'Binance' : bybitOHLCV ? 'Bybit' : 'OKX';
+      console.log(`[OHLCV FETCH] ${pair} ${timeframe}: Using ${sourceName} (Real-time), ${ohlcvResult.candles.length} candles`);
+      ohlcvCache[cacheKey] = { data: ohlcvResult, expiry: Date.now() + OHLCV_CACHE_TTL };
+      return ohlcvResult;
+    }
+
+    // If all exchange sources fail, try Twelve Data
+    const twelveOHLCV = await fetchOHLCVFromTwelveData(pair, timeframe);
+    if (twelveOHLCV) {
+      ohlcvCache[cacheKey] = { data: twelveOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
+      return twelveOHLCV;
+    }
+  } else {
+    // Forex pairs: Try Twelve Data first, then TradingView
+    const twelveOHLCV = await fetchOHLCVFromTwelveData(pair, timeframe);
+    if (twelveOHLCV) {
+      ohlcvCache[cacheKey] = { data: twelveOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
+      return twelveOHLCV;
+    }
   }
 
   // Strategy 2: Yahoo Finance (DELAYED — fallback)

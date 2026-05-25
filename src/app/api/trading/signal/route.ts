@@ -68,13 +68,23 @@ export async function POST(req: NextRequest) {
 
   // ─── SIGNAL GENERATION (wrapped in try for detailed error reporting) ───
   try {
-    // ─── KEY FIX: Use OHLCV currentPrice as primary (more reliable than regularMarketPrice) ───
-    // The OHLCV currentPrice is derived from latest candle close, which is more recent
-    // than Yahoo Finance's regularMarketPrice which can be 15+ minutes delayed
-    const currentPrice = ohlcvData.currentPrice || marketData.price;
-    const dayHigh = ohlcvData.dayHigh || marketData.high;
-    const dayLow = ohlcvData.dayLow || marketData.low;
-    const changePercent = ohlcvData.changePercent || marketData.changePercent;
+    // ─── KEY FIX v2: Prefer real-time marketData price over OHLCV ───
+    // Previously used ohlcvData.currentPrice as primary, but OHLCV comes from
+    // Yahoo Finance which is delayed 15-20min for commodities.
+    // Now marketData uses TradingView (real-time) so we prefer it when available.
+    const marketDataIsRealtime = marketData.priceQuality === 'realtime' && marketData.price > 0;
+    const currentPrice = marketDataIsRealtime
+      ? marketData.price
+      : (ohlcvData.currentPrice || marketData.price);
+    const dayHigh = marketDataIsRealtime && marketData.high > 0
+      ? marketData.high
+      : (ohlcvData.dayHigh || marketData.high);
+    const dayLow = marketDataIsRealtime && marketData.low > 0
+      ? marketData.low
+      : (ohlcvData.dayLow || marketData.low);
+    const changePercent = marketDataIsRealtime && marketData.changePercent !== 0
+      ? marketData.changePercent
+      : (ohlcvData.changePercent || marketData.changePercent);
 
     // ─── PRICE QUALITY ASSESSMENT ────────────────────────────────────
     const priceQuality = marketData.priceQuality || ohlcvData.priceQuality || 'delayed';

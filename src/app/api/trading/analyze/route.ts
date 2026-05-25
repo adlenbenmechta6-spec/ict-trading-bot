@@ -45,11 +45,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ─── KEY FIX: Use OHLCV currentPrice as primary (more reliable) ───
-    const currentPrice = ohlcvData.currentPrice || marketData.price;
-    const dayHigh = ohlcvData.dayHigh || marketData.high;
-    const dayLow = ohlcvData.dayLow || marketData.low;
-    const changePercent = ohlcvData.changePercent || marketData.changePercent;
+    // ─── KEY FIX v2: Prefer real-time marketData price over OHLCV ───
+    const marketDataIsRealtime = marketData.priceQuality === 'realtime' && marketData.price > 0;
+    const currentPrice = marketDataIsRealtime
+      ? marketData.price
+      : (ohlcvData.currentPrice || marketData.price);
+    const dayHigh = marketDataIsRealtime && marketData.high > 0
+      ? marketData.high
+      : (ohlcvData.dayHigh || marketData.high);
+    const dayLow = marketDataIsRealtime && marketData.low > 0
+      ? marketData.low
+      : (ohlcvData.dayLow || marketData.low);
+    const changePercent = marketDataIsRealtime && marketData.changePercent !== 0
+      ? marketData.changePercent
+      : (ohlcvData.changePercent || marketData.changePercent);
 
     // ─── PRICE QUALITY ASSESSMENT ────────────────────────────────────
     const priceQuality = marketData.priceQuality || ohlcvData.priceQuality || 'delayed';

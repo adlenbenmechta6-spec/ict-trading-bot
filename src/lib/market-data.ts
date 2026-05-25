@@ -634,6 +634,57 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
   };
 }
 
+// ─── Delay Compensation: Add buffer to SL when price data is stale ──
+export function compensateForDelay(
+  entry: number, sl: number, tp1: number, tp2: number,
+  isBuy: boolean, delayMinutes: number, pair: string
+): { entry: number; sl: number; tp1: number; tp2: number; buffer: number } {
+  if (delayMinutes <= 1) return { entry, sl, tp1, tp2, buffer: 0 };
+
+  // Buffer scales with delay: more delay = wider SL buffer
+  const bufferMultiplier = Math.min(delayMinutes * 0.15, 3.0); // Cap at 3x normal spread
+  const spreadMap: Record<string, number> = {
+    'EUR/USD': 0.0002, 'GBP/USD': 0.0003, 'USD/JPY': 0.03,
+    'XAU/USD': 0.50, 'XAG/USD': 0.05, 'BTC/USD': 50, 'ETH/USD': 2,
+    'US30': 5, 'NAS100': 5, 'US500': 1,
+    'GBP/JPY': 0.05, 'AUD/USD': 0.0002,
+  };
+  const baseSpread = spreadMap[pair] || 0.0003;
+  const buffer = baseSpread * bufferMultiplier;
+
+  const decimals = pair.includes('JPY') || pair === 'XAU/USD' || pair === 'XAG/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? (pair === 'XAG/USD' ? 3 : 2) : 5;
+
+  if (isBuy) {
+    // BUY: push SL further below entry to account for stale price
+    return { entry, sl: parseFloat((sl - buffer).toFixed(decimals)), tp1, tp2, buffer: parseFloat(buffer.toFixed(decimals)) };
+  } else {
+    // SELL: push SL further above entry to account for stale price
+    return { entry, sl: parseFloat((sl + buffer).toFixed(decimals)), tp1, tp2, buffer: parseFloat(buffer.toFixed(decimals)) };
+  }
+}
+
+// ─── Recommended Trading Style based on data quality ─────────────────
+export function getRecommendedTradingStyle(
+  priceQuality: string, delayMinutes: number, pair: string
+): { style: string; reason: string; warning?: string } {
+  if (priceQuality === 'realtime' || delayMinutes <= 2) {
+    return { style: 'any', reason: 'Real-time data — all trading styles are suitable.' };
+  }
+  if (priceQuality === 'near-realtime' || delayMinutes <= 5) {
+    return {
+      style: 'daytrading',
+      reason: `Data is ~${delayMinutes}min delayed — Day Trading (H1) and Swing Trading (H4/D1) are acceptable. Scalping is NOT recommended.`,
+      warning: `Data is ~${delayMinutes}min delayed. Scalping requires real-time data.`,
+    };
+  }
+  // Delayed data (>5min)
+  return {
+    style: 'swing',
+    reason: `Data is ~${delayMinutes}min delayed — Swing Trading on H4/D1 is recommended as the delay has minimal impact on longer timeframes. Day Trading on H1 is acceptable with wider SL.`,
+    warning: `⚠️ Price data is ~${delayMinutes}min delayed! Scalping and Day Trading on short timeframes (M1-M30) will have inaccurate entry/exit prices. Use SWING (H4/D1) for best results.`,
+  };
+}
+
 // Fetch multiple prices at once
 export async function fetchMultiplePrices(pairs: string[]): Promise<Record<string, MarketData>> {
   const results: Record<string, MarketData> = {};

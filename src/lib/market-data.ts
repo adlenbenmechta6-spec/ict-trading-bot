@@ -448,23 +448,34 @@ async function fetchFromYahooFinance(pair: string): Promise<MarketData | null> {
 // ─── PRIMARY: Twelve Data API (real-time prices) ────────────────────
 // Twelve Data provides REAL-TIME prices for forex, crypto, and commodities
 // Free tier: 800 credits/day, 8 credits/min
+// NOTE: XAG/USD, US30, NAS100, US500 are NOT on free plan
+// We use ETF proxies for these: SLV→XAG/USD, DIA→US30, QQQ→NAS100, SPY→US500
 const TWELVE_SYMBOL_MAP: Record<string, string> = {
   'EUR/USD': 'EUR/USD',
   'GBP/USD': 'GBP/USD',
   'USD/JPY': 'USD/JPY',
   'XAU/USD': 'XAU/USD',
-  'XAG/USD': 'XAG/USD',
+  'XAG/USD': 'SLV',       // ETF proxy: iShares Silver Trust tracks physical silver
   'BTC/USD': 'BTC/USD',
   'ETH/USD': 'ETH/USD',
-  'US30': 'US30',
-  'NAS100': 'NAS100',
-  'US500': 'US500',
+  'US30': 'DIA',           // ETF proxy: SPDR Dow Jones Industrial Average ETF
+  'NAS100': 'QQQ',         // ETF proxy: Invesco QQQ Trust tracks NASDAQ-100
+  'US500': 'SPY',          // ETF proxy: SPDR S&P 500 ETF
   'GBP/JPY': 'GBP/JPY',
   'AUD/USD': 'AUD/USD',
   'USD/CAD': 'USD/CAD',
   'NZD/USD': 'NZD/USD',
   'USD/CHF': 'USD/CHF',
   'EUR/GBP': 'EUR/GBP',
+};
+
+// ETF price to actual instrument price conversion
+// SLV directly tracks silver price (1:1), DIA≈DJIA/100, QQQ≈NDX/40, SPY≈SPX/10
+const ETF_CONVERSION: Record<string, { multiplier: number; offset: number; name: string }> = {
+  'XAG/USD': { multiplier: 1.0, offset: 0, name: 'SLV→XAG/USD (Silver ETF)' },
+  'US30':    { multiplier: 100, offset: 0, name: 'DIA→US30 (Dow ETF×100)' },
+  'NAS100':  { multiplier: 27, offset: 0, name: 'QQQ→NAS100 (Nasdaq ETF×27)' },
+  'US500':   { multiplier: 10, offset: 0, name: 'SPY→US500 (S&P ETF×10)' },
 };
 
 // Twelve Data interval mapping for OHLCV
@@ -508,14 +519,25 @@ async function fetchFromTwelveData(pair: string): Promise<MarketData | null> {
     const data = await response.json();
     // Check for API errors
     if (data?.status === 'error') {
-      console.error(`Twelve Data API error for ${pair}:`, data?.message);
+      console.error(`Twelve Data API error for ${pair} (tried ${symbol}):`, data?.message);
       return null;
     }
 
-    const price = parseFloat(data?.price);
-    if (isNaN(price) || !isValidPrice(pair, price)) return null;
+    let price = parseFloat(data?.price);
+    if (isNaN(price)) return null;
 
-    return buildMarketData(pair, price, 'Twelve Data (Real-time)', { delay: 'Real-time' });
+    // Convert ETF price to actual instrument price
+    const conversion = ETF_CONVERSION[pair];
+    let sourceLabel = 'Twelve Data (Real-time)';
+    if (conversion) {
+      price = price * conversion.multiplier + conversion.offset;
+      sourceLabel = `Twelve Data (${conversion.name})`;
+      console.log(`[ETF CONVERSION] ${pair}: ${symbol} raw=${data.price}, converted=${price} (×${conversion.multiplier})`);
+    }
+
+    if (!isValidPrice(pair, price)) return null;
+
+    return buildMarketData(pair, price, sourceLabel, { delay: 'Real-time' });
   } catch (error) {
     console.error(`Twelve Data fetch failed for ${pair}:`, error);
     return null;
@@ -546,12 +568,16 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
     const values = data?.values;
     if (!values || !Array.isArray(values) || values.length === 0) return null;
 
+    // Get ETF conversion factor for this pair
+    const conversion = ETF_CONVERSION[pair];
+    const mult = conversion?.multiplier || 1;
+
     const candles: OHLCVCandle[] = [];
     for (const v of values) {
-      const o = parseFloat(v.open);
-      const h = parseFloat(v.high);
-      const l = parseFloat(v.low);
-      const c = parseFloat(v.close);
+      const o = parseFloat(v.open) * mult;
+      const h = parseFloat(v.high) * mult;
+      const l = parseFloat(v.low) * mult;
+      const c = parseFloat(v.close) * mult;
       if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(c)) continue;
       candles.push({
         timestamp: new Date(v.datetime).getTime(),
@@ -577,6 +603,8 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
     const change = currentPrice - prevClose;
     const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
+    const sourceLabel = conversion ? `Twelve Data (${conversion.name})` : 'Twelve Data (Real-time)';
+
     return {
       pair,
       timeframe,
@@ -586,7 +614,7 @@ async function fetchOHLCVFromTwelveData(pair: string, timeframe: string): Promis
       dayLow,
       change: parseFloat(change.toFixed(4)),
       changePercent: parseFloat(changePercent.toFixed(2)),
-      source: 'Twelve Data (Real-time)',
+      source: sourceLabel,
       delay: 'Real-time',
     };
   } catch (error) {

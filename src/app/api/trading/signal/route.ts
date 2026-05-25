@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     // ─── KEY FIX v2: Prefer real-time marketData price over OHLCV ───
     // Previously used ohlcvData.currentPrice as primary, but OHLCV comes from
     // Yahoo Finance which is delayed 15-20min for commodities.
-    // Now marketData uses TradingView (real-time) so we prefer it when available.
+    // Now marketData uses TradingView/Bybit/OKX (real-time) so we prefer it when available.
     const marketDataIsRealtime = marketData.priceQuality === 'realtime' && marketData.price > 0;
     const currentPrice = marketDataIsRealtime
       ? marketData.price
@@ -85,6 +85,25 @@ export async function POST(req: NextRequest) {
     const changePercent = marketDataIsRealtime && marketData.changePercent !== 0
       ? marketData.changePercent
       : (ohlcvData.changePercent || marketData.changePercent);
+
+    // ─── KEY FIX v3: Update OHLCV last candle with real-time price ───
+    // When OHLCV data is delayed (from Yahoo Finance), the last candle's close
+    // might be stale. Update it with the real-time price for more accurate analysis.
+    if (marketDataIsRealtime && ohlcvData.candles.length > 0 && ohlcvData.priceQuality !== 'realtime') {
+      const lastCandle = ohlcvData.candles[ohlcvData.candles.length - 1];
+      if (lastCandle) {
+        const rtPrice = marketData.price;
+        // Update last candle: keep open/high/low but update close to real-time
+        lastCandle.close = rtPrice;
+        lastCandle.high = Math.max(lastCandle.high, rtPrice);
+        lastCandle.low = Math.min(lastCandle.low, rtPrice);
+        // Also update OHLCV metadata
+        ohlcvData.currentPrice = rtPrice;
+        ohlcvData.dayHigh = Math.max(ohlcvData.dayHigh, rtPrice);
+        ohlcvData.dayLow = Math.min(ohlcvData.dayLow, rtPrice);
+        console.log(`[OHLCV FIX] Updated last candle close to real-time price: ${rtPrice} (was from delayed ${ohlcvData.source})`);
+      }
+    }
 
     // ─── PRICE QUALITY ASSESSMENT ────────────────────────────────────
     const priceQuality = marketData.priceQuality || ohlcvData.priceQuality || 'delayed';

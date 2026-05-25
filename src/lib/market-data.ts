@@ -81,6 +81,7 @@ const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || '';
 // Binance Futures API is FREE, requires NO API KEY, and provides REAL-TIME prices
 // Available 24/7 for XAGUSDT, XAUUSDT, BTCUSDT, ETHUSDT
 // This solves the price delay problem that Yahoo Finance and Twelve Data free plan cause
+// NOTE: May be blocked on some Vercel regions — Bybit/OKX serve as backups
 const BINANCE_FUTURES_SYMBOLS: Record<string, string> = {
   'XAG/USD': 'XAGUSDT',    // ✅ Real-time silver (verified working ~78)
   'XAU/USD': 'XAUUSDT',    // ✅ Real-time gold (verified working ~3350)
@@ -97,6 +98,49 @@ const BINANCE_INTERVAL_MAP: Record<string, string> = {
   'H1': '1h',
   'H4': '4h',
   'D1': '1d',
+};
+
+// ─── BYBIT: Backup real-time source for commodities & crypto ────────────
+// Bybit API is FREE, requires NO API KEY, and provides REAL-TIME prices
+// Works from data center IPs where Binance might be blocked
+// Supports same commodity pairs as Binance
+const BYBIT_SYMBOLS: Record<string, string> = {
+  'XAG/USD': 'XAGUSDT',    // ✅ Real-time silver
+  'XAU/USD': 'XAUUSDT',    // ✅ Real-time gold
+  'BTC/USD': 'BTCUSDT',    // ✅ Real-time Bitcoin
+  'ETH/USD': 'ETHUSDT',    // ✅ Real-time Ethereum
+};
+
+// Bybit kline interval mapping (in minutes)
+const BYBIT_INTERVAL_MAP: Record<string, string> = {
+  'M1': '1',
+  'M5': '5',
+  'M15': '15',
+  'M30': '30',
+  'H1': '60',
+  'H4': '240',
+  'D1': 'D',
+};
+
+// ─── OKX: Second backup real-time source for commodities & crypto ───────
+// OKX API is FREE, requires NO API KEY, and provides REAL-TIME prices
+// Another alternative when Binance/Bybit are blocked
+const OKX_SYMBOLS: Record<string, string> = {
+  'XAG/USD': 'XAG-USDT-SWAP',    // ✅ Real-time silver
+  'XAU/USD': 'XAU-USDT-SWAP',    // ✅ Real-time gold
+  'BTC/USD': 'BTC-USDT-SWAP',    // ✅ Real-time Bitcoin
+  'ETH/USD': 'ETH-USDT-SWAP',    // ✅ Real-time Ethereum
+};
+
+// OKX candlestick interval mapping
+const OKX_INTERVAL_MAP: Record<string, string> = {
+  'M1': '1m',
+  'M5': '5m',
+  'M15': '15m',
+  'M30': '30m',
+  'H1': '1H',
+  'H4': '4H',
+  'D1': '1D',
 };
 
 // Yahoo Finance symbol mapping
@@ -351,6 +395,270 @@ async function fetchOHLCVFromBinance(pair: string, timeframe: string): Promise<O
   }
 }
 
+// ─── BYBIT: Real-Time Price Fetcher ────────────────────────────────────
+// Bybit V5 API — FREE, NO API KEY, REAL-TIME
+// Crucial backup when Binance is blocked on Vercel data center IPs
+async function fetchFromBybit(pair: string): Promise<MarketData | null> {
+  const symbol = BYBIT_SYMBOLS[pair];
+  if (!symbol) return null;
+
+  try {
+    const url = `https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) {
+      console.warn(`Bybit returned ${response.status} for ${pair} (${symbol})`);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data?.retCode !== 0 || !data?.result?.list?.length) {
+      console.warn(`Bybit: no data for ${pair} (${symbol}): ${data?.retMsg}`);
+      return null;
+    }
+
+    const ticker = data.result.list[0];
+    const price = parseFloat(ticker.lastPrice);
+    if (isNaN(price) || price <= 0 || !isValidPrice(pair, price)) {
+      console.warn(`Bybit: invalid price for ${pair}: ${ticker.lastPrice}`);
+      return null;
+    }
+
+    const prevPrice = parseFloat(ticker.prevClosePrice) || price;
+    const changePercent = parseFloat(ticker.price24hPcnt) * 100 || ((price - prevPrice) / prevPrice * 100);
+    const high = parseFloat(ticker.highPrice24h);
+    const low = parseFloat(ticker.lowPrice24h);
+
+    console.log(`[BYBIT] ${pair} (${symbol}): price=${price}, change=${changePercent.toFixed(2)}%, high=${high}, low=${low}`);
+
+    return buildMarketData(pair, price, 'Bybit (Real-time)', {
+      high: !isNaN(high) && high > 0 ? high : undefined,
+      low: !isNaN(low) && low > 0 ? low : undefined,
+      change: parseFloat((price - prevPrice).toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      delay: 'Real-time',
+      priceQuality: 'realtime',
+      delayMinutes: 0,
+    });
+  } catch (error) {
+    console.error(`Bybit fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
+// ─── BYBIT: Real-Time OHLCV Fetcher ──────────────────────────────────
+async function fetchOHLCVFromBybit(pair: string, timeframe: string): Promise<OHLCVData | null> {
+  const symbol = BYBIT_SYMBOLS[pair];
+  const interval = BYBIT_INTERVAL_MAP[timeframe];
+  if (!symbol || !interval) return null;
+
+  try {
+    const limit = timeframe === 'D1' ? 100 : 60;
+    const url = `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!response.ok) {
+      console.warn(`Bybit OHLCV returned ${response.status} for ${pair} ${timeframe}`);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data?.retCode !== 0 || !data?.result?.list?.length) {
+      console.warn(`Bybit: no OHLCV data for ${pair} ${timeframe}`);
+      return null;
+    }
+
+    // Bybit kline format: [startTime, open, high, low, close, volume, turnover]
+    // Data is returned in REVERSE order (newest first), so we reverse it
+    const rawCandles = data.result.list.reverse();
+    const candles: OHLCVCandle[] = [];
+    for (const k of rawCandles) {
+      const o = parseFloat(k[1]);
+      const h = parseFloat(k[2]);
+      const l = parseFloat(k[3]);
+      const c = parseFloat(k[4]);
+      const v = parseFloat(k[5]);
+      if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(c)) continue;
+      candles.push({
+        timestamp: parseInt(k[0]),
+        open: o, high: h, low: l, close: c, volume: v,
+      });
+    }
+
+    if (candles.length < 5) return null;
+
+    candles.sort((a, b) => a.timestamp - b.timestamp);
+    const currentPrice = candles[candles.length - 1].close;
+    if (!isValidPrice(pair, currentPrice)) return null;
+
+    const dayHigh = Math.max(...candles.slice(-24).map(c => c.high));
+    const dayLow = Math.min(...candles.slice(-24).map(c => c.low));
+    const prevClose = candles.length > 1 ? candles[candles.length - 2].close : currentPrice;
+    const change = currentPrice - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    console.log(`[BYBIT OHLCV] ${pair} ${timeframe}: ${candles.length} candles, price=${currentPrice}`);
+
+    return {
+      pair, timeframe, candles,
+      currentPrice, dayHigh, dayLow,
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      source: 'Bybit (Real-time)',
+      delay: 'Real-time',
+      priceQuality: 'realtime',
+      delayMinutes: 0,
+    };
+  } catch (error) {
+    console.error(`Bybit OHLCV failed for ${pair} ${timeframe}:`, error);
+    return null;
+  }
+}
+
+// ─── OKX: Real-Time Price Fetcher ─────────────────────────────────────
+// OKX V5 API — FREE, NO API KEY, REAL-TIME
+// Third backup when both Binance and Bybit are blocked
+async function fetchFromOKX(pair: string): Promise<MarketData | null> {
+  const instId = OKX_SYMBOLS[pair];
+  if (!instId) return null;
+
+  try {
+    const url = `https://www.okx.com/api/v5/market/ticker?instId=${instId}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) {
+      console.warn(`OKX returned ${response.status} for ${pair} (${instId})`);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data?.code !== '0' || !data?.data?.length) {
+      console.warn(`OKX: no data for ${pair} (${instId}): ${data?.msg}`);
+      return null;
+    }
+
+    const ticker = data.data[0];
+    const price = parseFloat(ticker.last);
+    if (isNaN(price) || price <= 0 || !isValidPrice(pair, price)) {
+      console.warn(`OKX: invalid price for ${pair}: ${ticker.last}`);
+      return null;
+    }
+
+    const open24h = parseFloat(ticker.open24h) || price;
+    const changePercent = open24h > 0 ? ((price - open24h) / open24h) * 100 : 0;
+    const high = parseFloat(ticker.high24h);
+    const low = parseFloat(ticker.low24h);
+
+    console.log(`[OKX] ${pair} (${instId}): price=${price}, change=${changePercent.toFixed(2)}%, high=${high}, low=${low}`);
+
+    return buildMarketData(pair, price, 'OKX (Real-time)', {
+      high: !isNaN(high) && high > 0 ? high : undefined,
+      low: !isNaN(low) && low > 0 ? low : undefined,
+      change: parseFloat((price - open24h).toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      delay: 'Real-time',
+      priceQuality: 'realtime',
+      delayMinutes: 0,
+    });
+  } catch (error) {
+    console.error(`OKX fetch failed for ${pair}:`, error);
+    return null;
+  }
+}
+
+// ─── OKX: Real-Time OHLCV Fetcher ─────────────────────────────────────
+async function fetchOHLCVFromOKX(pair: string, timeframe: string): Promise<OHLCVData | null> {
+  const instId = OKX_SYMBOLS[pair];
+  const bar = OKX_INTERVAL_MAP[timeframe];
+  if (!instId || !bar) return null;
+
+  try {
+    const limit = timeframe === 'D1' ? 100 : 60;
+    const url = `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=${limit}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!response.ok) {
+      console.warn(`OKX OHLCV returned ${response.status} for ${pair} ${timeframe}`);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data?.code !== '0' || !data?.data?.length) {
+      console.warn(`OKX: no OHLCV data for ${pair} ${timeframe}`);
+      return null;
+    }
+
+    // OKX candle format: [timestamp, open, high, low, close, volume, volCcy, volCcyQuote, confirm]
+    // Data is returned in REVERSE order (newest first)
+    const rawCandles = data.data.reverse();
+    const candles: OHLCVCandle[] = [];
+    for (const k of rawCandles) {
+      const o = parseFloat(k[1]);
+      const h = parseFloat(k[2]);
+      const l = parseFloat(k[3]);
+      const c = parseFloat(k[4]);
+      const v = parseFloat(k[5]);
+      if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(c)) continue;
+      candles.push({
+        timestamp: parseInt(k[0]),
+        open: o, high: h, low: l, close: c, volume: v,
+      });
+    }
+
+    if (candles.length < 5) return null;
+
+    candles.sort((a, b) => a.timestamp - b.timestamp);
+    const currentPrice = candles[candles.length - 1].close;
+    if (!isValidPrice(pair, currentPrice)) return null;
+
+    const dayHigh = Math.max(...candles.slice(-24).map(c => c.high));
+    const dayLow = Math.min(...candles.slice(-24).map(c => c.low));
+    const prevClose = candles.length > 1 ? candles[candles.length - 2].close : currentPrice;
+    const change = currentPrice - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    console.log(`[OKX OHLCV] ${pair} ${timeframe}: ${candles.length} candles, price=${currentPrice}`);
+
+    return {
+      pair, timeframe, candles,
+      currentPrice, dayHigh, dayLow,
+      change: parseFloat(change.toFixed(4)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      source: 'OKX (Real-time)',
+      delay: 'Real-time',
+      priceQuality: 'realtime',
+      delayMinutes: 0,
+    };
+  } catch (error) {
+    console.error(`OKX OHLCV failed for ${pair} ${timeframe}:`, error);
+    return null;
+  }
+}
+
 // ─── Fetch OHLCV Data for specific timeframe ──────────────────────────
 export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Promise<OHLCVData> {
   const cacheKey = `${pair}_${timeframe}`;
@@ -365,6 +673,24 @@ export async function fetchOHLCVData(pair: string, timeframe: string = 'H4'): Pr
     if (binanceOHLCV) {
       ohlcvCache[cacheKey] = { data: binanceOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
       return binanceOHLCV;
+    }
+  }
+
+  // Strategy 0.5: Bybit (REAL-TIME — backup when Binance is blocked on Vercel)
+  if (BYBIT_SYMBOLS[pair]) {
+    const bybitOHLCV = await fetchOHLCVFromBybit(pair, timeframe);
+    if (bybitOHLCV) {
+      ohlcvCache[cacheKey] = { data: bybitOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
+      return bybitOHLCV;
+    }
+  }
+
+  // Strategy 0.7: OKX (REAL-TIME — second backup)
+  if (OKX_SYMBOLS[pair]) {
+    const okxOHLCV = await fetchOHLCVFromOKX(pair, timeframe);
+    if (okxOHLCV) {
+      ohlcvCache[cacheKey] = { data: okxOHLCV, expiry: Date.now() + OHLCV_CACHE_TTL };
+      return okxOHLCV;
     }
   }
 
@@ -963,12 +1289,15 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
   }
 
   // ─── MULTI-SOURCE PARALLEL FETCH ────────────────────────────────────
-  // Fetch from ALL sources in parallel, then pick the best
-  // Binance Futures is PRIMARY for commodities/crypto (free, real-time, no API key)
-  console.log(`[PRICE FETCH] Fetching ${pair} from all sources in parallel...`);
+  // Fetch from ALL 7 sources in parallel, then pick the best
+  // Priority: Binance → Bybit → OKX → TradingView → Twelve Data → Finnhub → Yahoo Finance
+  // CRITICAL FIX: Bybit and OKX added as backups when Binance is blocked on Vercel
+  console.log(`[PRICE FETCH] Fetching ${pair} from all 7 sources in parallel...`);
 
-  const [binanceResult, tradingViewResult, twelveDataResult, finnhubResult, yahooResult] = await Promise.allSettled([
+  const [binanceResult, bybitResult, okxResult, tradingViewResult, twelveDataResult, finnhubResult, yahooResult] = await Promise.allSettled([
     fetchFromBinance(pair),        // Priority 0: Binance Futures (FREE, real-time, commodities/crypto)
+    fetchFromBybit(pair),          // Priority 0.5: Bybit (FREE, real-time — backup when Binance blocked)
+    fetchFromOKX(pair),            // Priority 0.7: OKX (FREE, real-time — second backup)
     fetchFromTradingView(pair),     // Priority 1: TradingView scanner
     fetchFromTwelveData(pair),      // Priority 2: Twelve Data (forex, ETFs)
     fetchFromFinnhub(pair),         // Priority 3: Finnhub
@@ -976,6 +1305,8 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
   ]);
 
   const binance = binanceResult.status === 'fulfilled' ? binanceResult.value : null;
+  const bybit = bybitResult.status === 'fulfilled' ? bybitResult.value : null;
+  const okx = okxResult.status === 'fulfilled' ? okxResult.value : null;
   const tradingView = tradingViewResult.status === 'fulfilled' ? tradingViewResult.value : null;
   const twelveData = twelveDataResult.status === 'fulfilled' ? twelveDataResult.value : null;
   const finnhub = finnhubResult.status === 'fulfilled' ? finnhubResult.value : null;
@@ -984,13 +1315,17 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
   // Collect all successful real-time sources with priorities
   const realtimeSources: Array<{ data: MarketData; priority: number }> = [];
   if (binance) realtimeSources.push({ data: binance, priority: 0 });      // Binance is #1 for commodities
+  if (bybit) realtimeSources.push({ data: bybit, priority: 0.5 });        // Bybit is #1.5 — key backup!
+  if (okx) realtimeSources.push({ data: okx, priority: 0.7 });           // OKX is #1.7 — second backup
   if (tradingView) realtimeSources.push({ data: tradingView, priority: 1 });
   if (twelveData) realtimeSources.push({ data: twelveData, priority: 2 });
   if (finnhub) realtimeSources.push({ data: finnhub, priority: 3 });
 
   // Log all source prices for debugging
   const sourceLog = [
-    binance ? `BIN=${binance.price}` : 'BIN=SKIP',
+    binance ? `BIN=${binance.price}` : 'BIN=FAIL',
+    bybit ? `BYB=${bybit.price}` : 'BYB=FAIL',
+    okx ? `OKX=${okx.price}` : 'OKX=FAIL',
     tradingView ? `TV=${tradingView.price}` : 'TV=FAIL',
     twelveData ? `12D=${twelveData.price}` : '12D=FAIL',
     finnhub ? `FH=${finnhub.price}` : 'FH=SKIP',
@@ -1017,30 +1352,32 @@ export async function fetchRealPrice(pair: string): Promise<MarketData> {
     const sourcesCompared = realtimeSources.length + (yahooData ? 1 : 0);
 
     // If we have multiple real-time sources, use weighted average
-    // Give more weight to Binance for commodities (most reliable)
+    // Give more weight to crypto exchange sources (Binance/Bybit/OKX) for commodities
     if (realtimeSources.length >= 2) {
-      // Check if Binance data is available (most reliable for commodities)
-      const binanceSource = realtimeSources.find(s => s.priority === 0);
-      if (binanceSource && BINANCE_FUTURES_SYMBOLS[pair]) {
-        // For commodities: trust Binance more (80% weight), average others (20% weight)
-        const otherPrices = realtimeSources.filter(s => s.priority !== 0).map(s => s.data.price);
+      // Check if any crypto exchange source is available (most reliable for commodities)
+      const exchangeSource = realtimeSources.find(s => s.priority <= 0.7); // Binance/Bybit/OKX
+      const isCommodityPair = BINANCE_FUTURES_SYMBOLS[pair] || BYBIT_SYMBOLS[pair] || OKX_SYMBOLS[pair];
+
+      if (exchangeSource && isCommodityPair) {
+        // For commodities: trust crypto exchange sources more, average with others
+        const exchangePrices = realtimeSources.filter(s => s.priority <= 0.7).map(s => s.data.price);
+        const otherPrices = realtimeSources.filter(s => s.priority > 0.7).map(s => s.data.price);
+        const exchangeAvg = exchangePrices.reduce((a, b) => a + b, 0) / exchangePrices.length;
         const otherAvg = otherPrices.length > 0
           ? otherPrices.reduce((a, b) => a + b, 0) / otherPrices.length
-          : binanceSource.data.price;
+          : exchangeAvg;
 
-        // If other sources are close to Binance (within 1%), use simple average
-        // If they differ significantly, trust Binance more
-        const deviation = Math.abs(otherAvg - binanceSource.data.price) / binanceSource.data.price;
         const decimals = pair.includes('JPY') || pair === 'XAU/USD' || pair === 'XAG/USD' || pair.startsWith('US') || pair.startsWith('NAS') ? (pair === 'XAG/USD' ? 3 : 2) : 5;
 
+        // If exchange and other sources agree (within 1%), use simple average
+        const deviation = Math.abs(otherAvg - exchangeAvg) / exchangeAvg;
         if (deviation < 0.01) {
-          // Sources agree - use simple average
           const avgPrice = realtimeSources.reduce((sum, s) => sum + s.data.price, 0) / realtimeSources.length;
           best.price = parseFloat(avgPrice.toFixed(decimals));
         } else {
-          // Sources disagree - trust Binance heavily
-          best.price = parseFloat((binanceSource.data.price * 0.85 + otherAvg * 0.15).toFixed(decimals));
-          console.log(`[PRICE WEIGHTED] ${pair}: Sources disagree (deviation=${(deviation*100).toFixed(2)}%), using Binance-weighted: ${best.price}`);
+          // Sources disagree — trust exchange sources heavily (85%)
+          best.price = parseFloat((exchangeAvg * 0.85 + otherAvg * 0.15).toFixed(decimals));
+          console.log(`[PRICE WEIGHTED] ${pair}: Sources disagree (deviation=${(deviation*100).toFixed(2)}%), using exchange-weighted: ${best.price}`);
         }
       } else {
         // Non-commodity: simple average of all sources

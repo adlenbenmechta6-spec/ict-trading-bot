@@ -1310,50 +1310,80 @@ async function fetchFromCoinGecko(pair: string): Promise<MarketData | null> {
   if (!coinConfig) return null;
 
   try {
-    // Use the coin detail endpoint to get price + 24h high/low/change
-    const url = `https://api.coingecko.com/api/v3/coins/${coinConfig.id}`;
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-      },
+    // Strategy: Try the detailed endpoint first (has high/low data).
+    // If rate limited (429), fall back to the simple/price endpoint (higher rate limits).
+    // The simple/price endpoint doesn't have 24h high/low, but it always works.
+    
+    // Attempt 1: Full coin detail (has price + high/low/change)
+    const detailUrl = `https://api.coingecko.com/api/v3/coins/${coinConfig.id}`;
+    const detailResponse = await fetch(detailUrl, {
+      headers: { 'Accept': 'application/json' },
       signal: AbortSignal.timeout(10000),
     });
 
-    if (!response.ok) {
-      console.warn(`CoinGecko returned ${response.status} for ${pair} (${coinConfig.id})`);
-      return null;
+    if (detailResponse.ok) {
+      const data = await detailResponse.json();
+      const md = data?.market_data;
+      if (md) {
+        const price = md.current_price?.usd;
+        if (price && !isNaN(price) && price > 0 && isValidPrice(pair, price)) {
+          const high = md.high_24h?.usd;
+          const low = md.low_24h?.usd;
+          const changePercent = md.price_change_percentage_24h || 0;
+          const prevPrice = price / (1 + changePercent / 100);
+          const change = price - prevPrice;
+
+          console.log(`[COINGECKO] ${pair} (${coinConfig.id}): price=${price}, change=${changePercent.toFixed(2)}%, high=${high}, low=${low} (detail endpoint)`);
+
+          return buildMarketData(pair, price, `CoinGecko (${coinConfig.name})`, {
+            high: high && !isNaN(high) && high > 0 ? high : undefined,
+            low: low && !isNaN(low) && low > 0 ? low : undefined,
+            change: parseFloat(change.toFixed(4)),
+            changePercent: parseFloat(changePercent.toFixed(2)),
+            delay: 'Real-time',
+            priceQuality: 'realtime',
+            delayMinutes: 0,
+          });
+        }
+      }
     }
 
-    const data = await response.json();
-    const md = data?.market_data;
-    if (!md) {
-      console.warn(`CoinGecko: no market_data for ${pair}`);
-      return null;
+    // Attempt 2: Simple price endpoint (higher rate limits, no high/low data)
+    if (detailResponse.status === 429 || !detailResponse.ok) {
+      console.log(`[COINGECKO] Detail endpoint rate limited (${detailResponse.status}), trying simple/price...`);
+      
+      const simpleUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${coinConfig.id}&vs_currencies=usd&include_24hr_change=true`;
+      const simpleResponse = await fetch(simpleUrl, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (simpleResponse.ok) {
+        const data = await simpleResponse.json();
+        const coinData = data?.[coinConfig.id];
+        if (coinData?.usd) {
+          const price = coinData.usd;
+          if (isValidPrice(pair, price)) {
+            const changePercent = coinData.usd_24h_change || 0;
+            const prevPrice = price / (1 + changePercent / 100);
+            const change = price - prevPrice;
+
+            console.log(`[COINGECKO] ${pair} (${coinConfig.id}): price=${price}, change=${changePercent.toFixed(2)}% (simple endpoint)`);
+
+            return buildMarketData(pair, price, `CoinGecko (${coinConfig.name})`, {
+              change: parseFloat(change.toFixed(4)),
+              changePercent: parseFloat(changePercent.toFixed(2)),
+              delay: 'Real-time',
+              priceQuality: 'realtime',
+              delayMinutes: 0,
+            });
+          }
+        }
+      }
     }
 
-    const price = md.current_price?.usd;
-    if (!price || isNaN(price) || price <= 0 || !isValidPrice(pair, price)) {
-      console.warn(`CoinGecko: invalid price for ${pair}: ${price}`);
-      return null;
-    }
-
-    const high = md.high_24h?.usd;
-    const low = md.low_24h?.usd;
-    const changePercent = md.price_change_percentage_24h || 0;
-    const prevPrice = price / (1 + changePercent / 100);
-    const change = price - prevPrice;
-
-    console.log(`[COINGECKO] ${pair} (${coinConfig.id}): price=${price}, change=${changePercent.toFixed(2)}%, high=${high}, low=${low}`);
-
-    return buildMarketData(pair, price, `CoinGecko (${coinConfig.name})`, {
-      high: high && !isNaN(high) && high > 0 ? high : undefined,
-      low: low && !isNaN(low) && low > 0 ? low : undefined,
-      change: parseFloat(change.toFixed(4)),
-      changePercent: parseFloat(changePercent.toFixed(2)),
-      delay: 'Real-time',
-      priceQuality: 'realtime',
-      delayMinutes: 0,
-    });
+    console.warn(`CoinGecko: all endpoints failed for ${pair}`);
+    return null;
   } catch (error) {
     console.error(`CoinGecko fetch failed for ${pair}:`, error);
     return null;

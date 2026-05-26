@@ -4,6 +4,7 @@ import { fetchRealPrice, fetchOHLCVData, compensateForDelay, getRecommendedTradi
 import { ICT_SIGNAL_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
 import { ICT_BEST_INSTRUMENTS } from '@/lib/ict-core-content';
 import { SMC_SETUPS, SMC_CONFLUENCE_FACTORS } from '@/lib/smc-knowledge';
+import { VOLMAN_SCALPING_SYSTEM_PROMPT, VOLMAN_SCALPING_PAIR_CONFIGS } from '@/lib/volman-scalping-knowledge';
 import {
   analyzeTrend,
   determineSignalDirection,
@@ -641,14 +642,24 @@ function getModeConfig(mode: string, timeframe: string) {
     case 'scalping':
       return {
         label: 'Scalping',
-        promptRules: `- This is a SCALPING signal on ${timeframe}
-- TP and SL should be very tight (small moves)
-- Focus on quick momentum entries IN THE DIRECTION OF THE TREND
-- SL should be very close to entry
-- TP targets are modest but achievable in seconds-minutes
-- Use micro-level ICT elements (1m/5m Order Blocks, micro FVGs)
-- Kill Zones are critical for scalping entries
-- MUST follow the trend direction — no counter-trend scalping`,
+        promptRules: `- This is a PROFESSIONAL SCALPING signal on ${timeframe} — use Bob Volman's methodology
+
+VOLMAN SCALPING RULES (MANDATORY):
+- The 20ema is your PRIMARY trend guide — if flat, DO NOT SCALP
+- Identify which of Volman's 7 setups is forming: DDB, FB, SB, BB, RB, IRB, ARB
+- FB (First Break) is the HIGHEST PRIORITY setup — always take it
+- Target: 10 pips (EUR/USD), 12-15 pips (GBP/USD), 8-10 pips (USD/JPY)
+- Stop: 5-6 pips at TECHNICAL level (signal bar extreme, pattern boundary)
+- Risk:Reward MUST be minimum 1:2 — if not achievable, DO NOT TRADE
+- Use the Tipping Point Technique — if price passes tipping point, EXIT IMMEDIATELY
+- NEVER scalp against the 20ema slope
+- Only scalp during Kill Zones: London (2-5AM NY), NY (7-10AM NY)
+- Best scalping pairs: EUR/USD (#1), GBP/USD (#2), USD/JPY (#3) — tight spreads essential
+- Do NOT scalp XAU/USD or XAG/USD — spreads too wide for scalping
+- Multi-Level TP for scalping: TP1 (5-6 pips) close 60%, TP2 (10 pips) close 30%, TP3 (12-15 pips) close 10%
+- Maximum 5-10 scalps per day — quality over quantity
+- If 20ema is flat/waving → "NO SCALP — 20ema flat, no direction"
+- If no Volman setup detected → "NO SETUP — wait for clear Volman pattern"`,
         atrMultiplier: 0.5,
       };
     case 'daytrading':

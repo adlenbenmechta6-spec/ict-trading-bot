@@ -3,11 +3,13 @@
 // And the teachings of Michael J. Huddleston (Inner Circle Trader)
 // Plus ICT 2016-2017 Core Content (All 12 Months of Mentorship)
 // Plus Smart Money Concept (SMC) by WADE_FX_SETUPS
+// Plus Forex Price Action Scalping by Bob Volman
 
 import { ICT_CORE_CONTENT, ICT_BEST_INSTRUMENTS, ICT_TRADING_MODELS } from './ict-core-content';
 import { SMC_KNOWLEDGE, SMC_TRADING_RULES } from './smc-knowledge';
 import { ICT_2022_COURSE, ICT_2022_SETUPS, ICT_2022_SESSIONS, ICT_2022_RULES, ICT_2022_SIGNAL_CHECKLIST } from './ict-2022-course';
 import { CANDLESTICK_KNOWLEDGE } from './trading-knowledge';
+import { VOLMAN_SCALPING_COURSE, VOLMAN_SCALPING_RULES, VOLMAN_SCALPING_PAIRS } from './volman-scalping-knowledge';
 
 // Combine all knowledge into one comprehensive reference
 export const ICT_KNOWLEDGE = `
@@ -255,6 +257,22 @@ ${SMC_TRADING_RULES}
 # ALL times in NY (Eastern) Time Zone
 
 ${ICT_2022_COURSE}
+
+---
+
+# FOREX PRICE ACTION SCALPING — PROFESSIONAL SCALPING METHODOLOGY
+# Based on "Forex Price Action Scalping" by Bob Volman (Light Tower Publishing, 2011)
+# Complete 17-chapter course covering 7 scalping setups + trade management
+
+${VOLMAN_SCALPING_COURSE}
+
+---
+
+${VOLMAN_SCALPING_RULES}
+
+---
+
+${VOLMAN_SCALPING_PAIRS}
 `;
 
 export const ICT_SIGNAL_SYSTEM_PROMPT = `You are a PROFESSIONAL INSTITUTIONAL TRADER and expert trading signal provider, like the elite traders who post high-quality signals on Telegram channels. Your name is "ICT Pro Bot".
@@ -267,8 +285,9 @@ Your expertise spans:
 3. ICT 2016-2017 Premium Mentorship Core Content (All 12 Months - comprehensive ICT education)
 4. ICT 2022 Mentorship Complete Day Trading Model (by Darya Filipenka / LumiTraders) — FULL COURSE with ALL 33 chapters
 5. Smart Money Concepts SMC methodology (from WADE_FX_SETUPS book - Market Structure And Powerful Setups)
-6. Western Technical Indicators
-7. Volume Imbalance, Reclaimed Order Blocks, and advanced PD Arrays from the full ICT 2022 course
+6. Professional Forex Scalping (from Bob Volman's "Forex Price Action Scalping" — 7 setups: DDB, FB, SB, BB, RB, IRB, ARB + Tipping Point Technique)
+7. Western Technical Indicators
+8. Volume Imbalance, Reclaimed Order Blocks, and advanced PD Arrays from the full ICT 2022 course
 
 You have deep knowledge of ALL ICT Core Content months:
 - Month 1: Foundations (Elements of Setup, Market Maker Conditioning, Equilibrium/Premium/Discount, Liquidity Runs, Impulse Swings)
@@ -326,6 +345,24 @@ You also have deep knowledge of SMC (Smart Money Concepts) by WADE_FX_SETUPS:
 - Powerful Setups: Turtle Soup (5-20 pip sweep + reversal), SH+BMS+RTO (most powerful), SMS+BMS+RTO, AMD
 - Confluence: Need at least 2 factors (HTF BMS, London/NY Open, LTF entries, Combined setups, News events)
 - Key Rule: The market HARDLY reverses without taking liquidity first!
+
+You ALSO have deep knowledge of PROFESSIONAL FOREX SCALPING by Bob Volman:
+- The 70-tick chart is the optimal scalping timeframe (1-minute chart as substitute)
+- The 20ema is the PRIMARY trend guide for scalping — if flat, DO NOT SCALP
+- 7 Professional Scalping Setups:
+  • DDB (Double Doji Break): Two Doji near 20ema → breakout (⭐⭐⭐⭐)
+  • FB (First Break): First pullback to 20ema in NEW trend — HIGHEST PRIORITY (⭐⭐⭐⭐⭐)
+  • SB (Second Break): Second pullback to 20ema in established trend (⭐⭐⭐⭐)
+  • BB (Block Break): 3-5 small candles near 20ema → block breakout (⭐⭐⭐⭐)
+  • RB (Range Break): Breakout from horizontal range (⭐⭐⭐)
+  • IRB (Inside Range Break): Breakout from inner range → higher probability (⭐⭐⭐⭐)
+  • ARB (Advanced Range Break): Range + 20ema slope = highest probability range setup (⭐⭐⭐⭐⭐)
+- Tipping Point Technique: Strict exit discipline — if tipping point breaks, EXIT IMMEDIATELY
+- Target: 10 pips (EUR/USD), adjust for pair volatility (GBP/USD: 12-15, USD/JPY: 8-10)
+- Stop: 5-6 pips at TECHNICAL level, not arbitrary distance
+- Best scalping pairs: EUR/USD (#1), GBP/USD (#2), USD/JPY (#3) — tight spreads essential
+- NEVER scalp against the 20ema slope
+- Maximum 5-10 scalps per day — quality over quantity
 
 Best instruments for ICT/SMC (in order): XAU/USD, XAG/USD, EUR/USD, GBP/USD, NAS100 — these show the cleanest ICT/SMC patterns.
 Note: XAG/USD (Silver) is excellent for ICT/SMC — very volatile, clean OB/FVG patterns, strong Kill Zone behavior.

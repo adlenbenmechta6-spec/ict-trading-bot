@@ -5,6 +5,7 @@ import { ICT_KNOWLEDGE, ICT_SIGNAL_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
 import { ICT_BEST_INSTRUMENTS, ICT_TRADING_MODELS } from '@/lib/ict-core-content';
 import { SMC_KNOWLEDGE, SMC_SETUPS, SMC_CONFLUENCE_FACTORS } from '@/lib/smc-knowledge';
 import { PROFESSIONAL_TRADER_MINDSET } from '@/lib/professional-trading-rules';
+import { VOLMAN_SCALPING_SYSTEM_PROMPT, VOLMAN_SCALPING_PAIRS, VOLMAN_SCALPING_PAIR_CONFIGS } from '@/lib/volman-scalping-knowledge';
 
 export const maxDuration = 30;
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
 
 ${PROFESSIONAL_TRADER_MINDSET}
 
-You are ICT Pro Bot - a professional trading assistant trained on 6 comprehensive knowledge sources:
+You are ICT Pro Bot - a professional trading assistant trained on 7 comprehensive knowledge sources:
 
 📚 **Source 1: Japanese Candlesticks** (Fred K.H. Tam) — All major/reversal/continuation patterns, volume analysis, practical application
 📚 **Source 2: ICT 2016-2017 Core Content** — All 12 Months of Mentorship by Michael J. Huddleston
@@ -47,18 +48,24 @@ You are ICT Pro Bot - a professional trading assistant trained on 6 comprehensiv
 📚 **Source 4: Smart Money Concepts (SMC)** — All setups (Turtle Soup, SH+BMS+RTO, SMS+BMS+RTO), confluence factors, trading rules
 📚 **Source 5: Professional Trading Rules** — 10 Commandments, Signal Quality Tiers (A+/A/B/C/F), Entry Sequence, Exit Management
 📚 **Source 6: ICT Pattern Detection** — Real-time OB, FVG, MSS, Liquidity Sweep detection in OHLCV data
+📚 **Source 7: Forex Price Action Scalping** (Bob Volman) — 7 Professional Scalping Setups (DDB, FB, SB, BB, RB, IRB, ARB), Tipping Point Technique, 20ema trend guide, tick chart analysis, scalping pair selection
 
 Best instruments for ICT:
 - Tier 1 (BEST): XAU/USD, EUR/USD, GBP/USD, NAS100
 - Tier 2 (Good): USD/JPY, GBP/JPY, US30, XAG/USD
 - Tier 3 (Acceptable): BTC/USD, ETH/USD, US500
 
+Best instruments for SCALPING (Bob Volman method):
+- Tier 1 (BEST): EUR/USD (#1 — tightest spread), GBP/USD (#2), USD/JPY (#3)
+- Tier 2 (Good): EUR/GBP, AUD/USD, USD/CAD
+- NOT recommended for scalping: XAU/USD, XAG/USD (spreads too wide), exotic pairs, crypto
+
 Trading Style Recommendations:
 - SWING: Best for XAU/USD, XAG/USD, GBP/JPY, BTC/USD, ETH/USD, US500 (1:3-1:5 R:R, 40-55% win rate)
 - DAY: Best for EUR/USD, GBP/USD, USD/JPY, NAS100, US30 (1:2 R:R, 50-60% win rate)
-- SCALP: Only EUR/USD, USD/JPY on ECN accounts (tightest spreads required)
+- SCALP: Only EUR/USD, GBP/USD, USD/JPY on ECN accounts (tightest spreads required, 10-pip target, Volman 7 setups)
 
-Answer questions about: candlestick patterns, ICT concepts (OB, FVG, BSL/SSL, Kill Zones, Silver Bullet, MSS, AMD, OSOK, CBDR, Bread & Butter), all PD-Arrays, SMC setups, trading models, risk management, top-down analysis, best instruments, trading style recommendations, exit management (break-even, trailing stop, partial close).
+Answer questions about: candlestick patterns, ICT concepts (OB, FVG, BSL/SSL, Kill Zones, Silver Bullet, MSS, AMD, OSOK, CBDR, Bread & Butter), all PD-Arrays, SMC setups, trading models, risk management, top-down analysis, best instruments, trading style recommendations, exit management (break-even, trailing stop, partial close), SCALPING (Volman 7 setups, DDB, FB, SB, BB, RB, IRB, ARB, Tipping Point, 20ema, tick charts, best scalping pairs).
 
 Be concise (250 words max), helpful, educational. Use emojis. Respond in the same language as the user's message.`,
       userMessage: message + priceContext,
@@ -143,6 +150,88 @@ Time windows with the highest trading volume and institutional activity:
 4. SL below/above the liquidity sweep
 
 💡 Per ICT Core Content Month 1 & 8: The best trades happen when Kill Zones align with Silver Bullet windows and liquidity is present. The Silver Bullet is a time-based model — during these windows, the algorithm actively hunts liquidity and fills FVGs.`;
+    } else if (lowerMsg.includes('scalp') || lowerMsg.includes('scalping') || lowerMsg.includes('سكالب')) {
+      response = `⚡ **Professional Forex Scalping** — Bob Volman Method
+
+**7 Scalping Setups (all based on 20ema):**
+
+1️⃣ **DDB (Double Doji Break)** ⭐⭐⭐⭐
+Two Doji candles near 20ema → breakout in trend direction
+
+2️⃣ **FB (First Break)** ⭐⭐⭐⭐⭐ — HIGHEST PRIORITY
+First pullback to 20ema after new trend begins — best entry
+
+3️⃣ **SB (Second Break)** ⭐⭐⭐⭐
+Second pullback to 20ema in established trend
+
+4️⃣ **BB (Block Break)** ⭐⭐⭐⭐
+3-5 small candles near 20ema → block breakout
+
+5️⃣ **RB (Range Break)** ⭐⭐⭐
+Breakout from clearly defined horizontal range
+
+6️⃣ **IRB (Inside Range Break)** ⭐⭐⭐⭐
+Smaller range inside larger → higher probability
+
+7️⃣ **ARB (Advanced Range Break)** ⭐⭐⭐⭐⭐
+Range + 20ema slope = highest probability range setup
+
+**Key Rules:**
+• 20ema is your PRIMARY guide — if flat, DON'T SCALP
+• Target: 10 pips (EUR/USD) | Stop: 5-6 pips at technical level
+• Use the Tipping Point Technique — strict exit discipline
+• Best pairs: EUR/USD (#1), GBP/USD (#2), USD/JPY (#3)
+• Never scalp XAU/USD or XAG/USD — spreads too wide
+• Kill Zones only: London (2-5AM NY), NY (7-10AM NY)
+• Max 5-10 scalps/day — quality over quantity
+
+💡 Per Volman: "The professional scalper spends MORE TIME WAITING than trading."`;
+    } else if (lowerMsg.includes('tipping point') || lowerMsg.includes('نقطة التحول')) {
+      response = `🎯 **Tipping Point Technique** — Bob Volman's Trade Management
+
+The CORE of professional scalping — strict exit discipline:
+
+**What is the Tipping Point?**
+A price level that determines if your trade is still valid. If price passes it by even 1 pip → EXIT IMMEDIATELY.
+
+**How to Set It:**
+1. Initial: Below/above signal bar (5-6 pip SL)
+2. After 3-4 pips in favor → Move to breakeven
+3. After 7-8 pips → Lock in 5 pips profit
+4. At 10 pips (target) → Take profit or lock in 8 pips
+
+**Key Rules:**
+• NEVER widen your stop — that's gambling
+• NEVER move tipping point further from entry
+• Only move it CLOSER (tightening) as trade progresses
+• A "stall" near tipping point = WARNING → consider early exit
+• If trade not working in 5-10 candles → consider scratching
+
+💡 Per Volman: "If the tipping point is surpassed by even 1 pip, the trade is scratched with no questions asked."`;
+    } else if (lowerMsg.includes('best') && (lowerMsg.includes('scalp') || lowerMsg.includes('سكالب'))) {
+      response = `🏆 **Best Currency Pairs for Scalping** (Bob Volman Method)
+
+**Tier 1 — BEST (Lowest Spread + Highest Liquidity):**
+1. 🥇 **EUR/USD** — Spread: 0.1-0.5 pips | Win rate: 70-75%
+   • Volman's PRIMARY pair — all examples use it
+   • 10-pip target, 5-6 pip SL, best R:R
+2. 🥈 **GBP/USD** — Spread: 0.5-1.0 pips | Win rate: 65-70%
+   • Larger moves (80-120 pips daily) → target 12-15 pips
+3. 🥉 **USD/JPY** — Spread: 0.2-0.6 pips | Win rate: 68-73%
+   • Active in Asian session (unique)
+
+**Tier 2 — GOOD:**
+4. EUR/GBP — Tight range, great for RB/IRB/ARB setups (72-78% win rate)
+5. AUD/USD — Clean pullbacks, active in Asia+London
+6. USD/CAD — Good NY session pair
+
+**❌ NOT for Scalping:**
+• XAU/USD (Gold) — Spread 20-50 cents, use for DAY/SWING only
+• XAG/USD (Silver) — Too volatile proportionally for scalping
+• Exotic pairs — Massive spreads
+• Crypto — Different market structure
+
+💡 Key: Spread ≤1 pip on ECN is ESSENTIAL — it's your #1 cost as a scalper!`;
     } else if (lowerMsg.includes('best') && (lowerMsg.includes('pair') || lowerMsg.includes('instrument') || lowerMsg.includes('currency') || lowerMsg.includes('صنف') || lowerMsg.includes('عمل'))) {
       response = `🏆 **Best Instruments for ICT Smart Money Trading**
 

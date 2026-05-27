@@ -444,7 +444,7 @@ PROFESSIONAL QUALITY GATE:
               signal.tp3 = parseFloat((currentPrice + atrDist.tp2 * 1.3).toFixed(getDecimals(pair)));
               // Extra safety: if SL is still negative or above entry, use percentage-based fallback
               if (signal.sl <= 0 || signal.sl >= signal.entry) {
-                const slPct = mode === 'scalping' ? 0.003 : mode === 'daytrading' ? 0.005 : 0.008;
+                const slPct = mode === 'scalping' ? 0.003 : mode === 'daytrading' ? 0.005 : mode === 'fundednext' ? 0.015 : 0.008;
                 signal.sl = parseFloat((currentPrice * (1 - slPct)).toFixed(getDecimals(pair)));
                 signal.tp1 = parseFloat((currentPrice * (1 + slPct * 1)).toFixed(getDecimals(pair)));
                 signal.tp2 = parseFloat((currentPrice * (1 + slPct * 2)).toFixed(getDecimals(pair)));
@@ -462,7 +462,7 @@ PROFESSIONAL QUALITY GATE:
               signal.tp3 = parseFloat((currentPrice - atrDist.tp2 * 1.3).toFixed(getDecimals(pair)));
               // Extra safety: if SL is above reasonable range, use percentage-based fallback
               if (signal.sl <= signal.entry || signal.sl > currentPrice * 1.1) {
-                const slPct = mode === 'scalping' ? 0.003 : mode === 'daytrading' ? 0.005 : 0.008;
+                const slPct = mode === 'scalping' ? 0.003 : mode === 'daytrading' ? 0.005 : mode === 'fundednext' ? 0.015 : 0.008;
                 signal.sl = parseFloat((currentPrice * (1 + slPct)).toFixed(getDecimals(pair)));
                 signal.tp1 = parseFloat((currentPrice * (1 - slPct * 1)).toFixed(getDecimals(pair)));
                 signal.tp2 = parseFloat((currentPrice * (1 - slPct * 2)).toFixed(getDecimals(pair)));
@@ -497,15 +497,55 @@ PROFESSIONAL QUALITY GATE:
         // Add exit management instructions to the analysis (Multi-Level TP: 50/30/20)
         let exitMgmtSummary = `\n\n📋 EXIT MANAGEMENT (Multi-Level TP):\n• TP1 (${signal.tp1}): Close 50% + Move SL to Breakeven (${exitMgmt.breakevenPrice})\n• TP2 (${signal.tp2}): Close 30% + Trail SL behind structure\n• TP3 (${signal.tp3}): Close remaining 20%\n• Early BE Trigger: ${exitMgmt.earlyBETrigger} (move SL to BE when price reaches this)\n• 🚨 NEVER let a winner turn into a loser!`;
 
-        // FundedNext-specific risk context
+        // FundedNext-specific risk context (with auto-capped SL)
         if (mode === 'fundednext') {
           const slDistance = Math.abs(signal.sl - signal.entry);
           const riskPct = ((slDistance / signal.entry) * 100).toFixed(2);
           const riskDollar = (slDistance / signal.entry * 6000).toFixed(2);
-          exitMgmtSummary += `\n\n🏆 FUNDEDNEXT 6K STELLAR 2-STEP:\n• Risk per trade: ${riskPct}% ($${riskDollar} on $6K account)${parseFloat(riskDollar) > 60 ? ' ⚠️ EXCEEDS 1% LIMIT! Reduce position size!' : ' ✅ Within 1% limit'}`;
+          
+          // Calculate recommended lot size for 1% risk ($60)
+          const targetRiskDollar = 60; // 1% of $6,000
+          let pipValuePerPoint: number;
+          if (pair === 'XAU/USD') {
+            pipValuePerPoint = 100; // $100 per $1 move per standard lot
+          } else if (pair === 'XAG/USD') {
+            pipValuePerPoint = 50; // $50 per $1 move per standard lot
+          } else if (pair.includes('JPY')) {
+            pipValuePerPoint = 1000; // $1000 per 1.00 move per standard lot
+          } else {
+            pipValuePerPoint = 100000; // $100,000 per 1.00 move per standard lot
+          }
+          const recommendedLots = (targetRiskDollar / (slDistance * pipValuePerPoint)).toFixed(2);
+          
+          const riskStatus = parseFloat(riskDollar) <= 60 ? '✅ Within 1% limit ($60)' : parseFloat(riskDollar) <= 90 ? '✅ Within 1.5% limit ($90)' : '⚠️ EXCEEDS 1.5% LIMIT!';
+          
+          exitMgmtSummary += `\n\n🏆 FUNDEDNEXT 6K STELLAR 2-STEP:\n• Risk per trade: ${riskPct}% ($${riskDollar} on $6K account) ${riskStatus}`;
+          exitMgmtSummary += `\n• 📐 Recommended Lot Size: ${recommendedLots} lots (for 1% risk = $60)`;
           exitMgmtSummary += `\n• Daily Loss Limit: 5% ($300) | Max Loss: 10% ($600)`;
           exitMgmtSummary += `\n• Phase 1 Target: 8% ($480) | Phase 2 Target: 5% ($300)`;
-          exitMgmtSummary += `\n• ${parseFloat(riskDollar) <= 60 ? '✅ Safe to trade with standard lot size' : '⚠️ Use MINI lot (0.01-0.05) to stay within 1% risk'}`;
+          exitMgmtSummary += `\n• SL is AUTO-CAPPED to never exceed 1.5% ($90) risk per trade`;
+          
+          // If SL still exceeds 1.5% (shouldn't happen but safety check), force tighten it
+          if (parseFloat(riskDollar) > 90) {
+            const maxSLDistance = signal.entry * 0.015; // 1.5% of entry price
+            if (signal.type === 'BUY') {
+              signal.sl = parseFloat((signal.entry - maxSLDistance).toFixed(pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : 5));
+            } else {
+              signal.sl = parseFloat((signal.entry + maxSLDistance).toFixed(pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : 5));
+            }
+            // Recalculate TPs with tightened SL
+            const newSLDist = Math.abs(signal.sl - signal.entry);
+            if (signal.type === 'BUY') {
+              signal.tp1 = parseFloat((signal.entry + newSLDist * 1).toFixed(pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : 5));
+              signal.tp2 = parseFloat((signal.entry + newSLDist * 2).toFixed(pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : 5));
+              signal.tp3 = parseFloat((signal.entry + newSLDist * 3).toFixed(pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : 5));
+            } else {
+              signal.tp1 = parseFloat((signal.entry - newSLDist * 1).toFixed(pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : 5));
+              signal.tp2 = parseFloat((signal.entry - newSLDist * 2).toFixed(pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : 5));
+              signal.tp3 = parseFloat((signal.entry - newSLDist * 3).toFixed(pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : 5));
+            }
+            console.warn(`[FUNDEDNEXT RISK CAP] SL exceeded 1.5% risk! Tightened SL to ${signal.sl}, recalculated TPs: TP1=${signal.tp1}, TP2=${signal.tp2}, TP3=${signal.tp3}`);
+          }
         }
         signal.analysis = (signal.analysis || '') + exitMgmtSummary;
 
@@ -687,18 +727,22 @@ VOLMAN SCALPING RULES (MANDATORY):
 - Performance Reward: Up to 95% | 15% from Challenge Phase
 
 CRITICAL RISK MANAGEMENT FOR FUNDEDNEXT:
-1. NEVER risk more than 1% of account ($60) per trade — this ensures you can take 5 losses before hitting daily limit
-2. SL MUST be placed at a logical level that limits risk to max $60 per trade
-3. Only take A+ and A signals (confluence score 8+/12) — skip B, C, F signals
-4. NEVER trade during high-impact news — prop firms monitor this
-5. NEVER hold over weekend if possible — gap risk can exceed daily loss limit
-6. Target minimum 1:2 R:R — need consistent wins to reach 8% target
-7. Focus on SWING trades (H4/D1) — less screen time, more reliable signals
-8. Best pairs for prop firm: XAU/USD, GBP/JPY, EUR/USD, GBP/USD — high liquidity
-9. Track daily P&L: if you're down $200+ today, STOP trading to protect daily limit
-10. After 2 consecutive losses, take a 4-hour break — avoid revenge trading
+1. STOP LOSS IS AUTO-CAPPED: Max risk per trade is 1%-1.5% of account ($60-$90)
+2. The SL will be AUTOMATICALLY tightened if it would risk more than 1.5% ($90)
+3. Target 1% risk ($60) as ideal — use recommended lot size to achieve this
+4. SL MUST be placed at a logical level that respects the 1%-1.5% risk cap
+5. Only take A+ and A signals (confluence score 8+/12) — skip B, C, F signals
+6. NEVER trade during high-impact news — prop firms monitor this
+7. NEVER hold over weekend if possible — gap risk can exceed daily loss limit
+8. Target minimum 1:2 R:R — need consistent wins to reach 8% target
+9. Focus on SWING trades (H4/D1) — less screen time, more reliable signals
+10. Best pairs for prop firm: EUR/USD, GBP/USD (lowest spread), XAU/USD (high liquidity)
+11. Track daily P&L: if you're down $200+ today, STOP trading to protect daily limit
+12. After 2 consecutive losses, take a 4-hour break — avoid revenge trading
+13. Position sizing is CRITICAL: always use the recommended lot size shown in the signal
 - MUST follow the trend direction — counter-trend trades violate prop firm risk rules
-- This is for PASSING A PROPEL CHALLENGE — only take the BEST setups`,
+- This is for PASSING A PROP FIRM CHALLENGE — only take the BEST setups
+- SL IS ENFORCED BY THE SYSTEM — it will never exceed 1.5% ($90) risk per trade`,
         atrMultiplier: 1.0,
       };
     default: // swing

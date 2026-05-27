@@ -315,8 +315,12 @@ export function calculateProfessionalSLTP(params: {
   fvgHigh?: number;
   fvgLow?: number;
   mode: 'scalping' | 'daytrading' | 'swing' | 'fundednext';
-}): { sl: number; tp1: number; tp2: number; tp3: number; rr: number; slReason: string; tp1Reason: string; tp2Reason: string; tp3Reason: string } {
+  accountSize?: number; // Used for fundednext risk capping (default: 6000)
+  maxRiskPct?: number; // Max risk % per trade for fundednext (default: 1.5)
+}): { sl: number; tp1: number; tp2: number; tp3: number; rr: number; slReason: string; tp1Reason: string; tp2Reason: string; tp3Reason: string; riskPct?: number; riskDollar?: number; recommendedLots?: string } {
   const { entry, isBuy, atr, pair, swingHigh, swingLow, mode } = params;
+  const accountSize = params.accountSize || 6000;
+  const maxRiskPct = params.maxRiskPct || 1.5; // 1.5% max risk per trade
   const decimals = pair.includes('JPY') ? 3 : pair === 'XAU/USD' ? 2 : pair === 'XAG/USD' ? 3 : pair.startsWith('US') || pair.startsWith('NAS') ? 2 : 5;
 
   // Professional SL placement: Below structure, not just ATR
@@ -440,6 +444,45 @@ export function calculateProfessionalSLTP(params: {
     tp3Reason = `1:3+ RR (${(slDistance * 3).toFixed(decimals)} points) — Close remaining 20%`;
   }
 
+  // ─── FUNDEDNEXT RISK CAP: Ensure SL doesn't exceed 1%-1.5% of account ──
+  if (mode === 'fundednext') {
+    const slDistance = Math.abs(sl - entry);
+    // Calculate the max SL distance as % of entry price that keeps risk within maxRiskPct%
+    // riskDollar = (slDistance / entry) * accountSize
+    // We want: riskDollar <= accountSize * (maxRiskPct / 100)
+    // So: slDistance <= entry * (maxRiskPct / 100)
+    const maxSLDistance = entry * (maxRiskPct / 100);
+    
+    if (slDistance > maxSLDistance) {
+      // Tighten SL to the maximum allowed distance
+      if (isBuy) {
+        sl = parseFloat((entry - maxSLDistance).toFixed(decimals));
+        slReason = `FUNDEDNEXT Risk Cap: Max ${maxRiskPct}% risk → SL tightened from ${slDistance.toFixed(decimals)} to ${maxSLDistance.toFixed(decimals)} (${slReason})`;
+      } else {
+        sl = parseFloat((entry + maxSLDistance).toFixed(decimals));
+        slReason = `FUNDEDNEXT Risk Cap: Max ${maxRiskPct}% risk → SL tightened from ${slDistance.toFixed(decimals)} to ${maxSLDistance.toFixed(decimals)} (${slReason})`;
+      }
+      
+      // Recalculate TPs based on the new tighter SL distance
+      const newSLDistance = Math.abs(sl - entry);
+      if (isBuy) {
+        tp1 = parseFloat((entry + newSLDistance * 1).toFixed(decimals));
+        tp2 = parseFloat((entry + newSLDistance * 2).toFixed(decimals));
+        tp3 = parseFloat((entry + newSLDistance * 3).toFixed(decimals));
+        tp1Reason = `1:1 RR (risk-capped ${newSLDistance.toFixed(decimals)} pts) — Close 50%`;
+        tp2Reason = `1:2 RR (risk-capped ${(newSLDistance * 2).toFixed(decimals)} pts) — Close 30%`;
+        tp3Reason = `1:3+ RR (risk-capped ${(newSLDistance * 3).toFixed(decimals)} pts) — Close 20%`;
+      } else {
+        tp1 = parseFloat((entry - newSLDistance * 1).toFixed(decimals));
+        tp2 = parseFloat((entry - newSLDistance * 2).toFixed(decimals));
+        tp3 = parseFloat((entry - newSLDistance * 3).toFixed(decimals));
+        tp1Reason = `1:1 RR (risk-capped ${newSLDistance.toFixed(decimals)} pts) — Close 50%`;
+        tp2Reason = `1:2 RR (risk-capped ${(newSLDistance * 2).toFixed(decimals)} pts) — Close 30%`;
+        tp3Reason = `1:3+ RR (risk-capped ${(newSLDistance * 3).toFixed(decimals)} pts) — Close 20%`;
+      }
+    }
+  }
+
   // Round to proper decimals
   sl = parseFloat(sl.toFixed(decimals));
   tp1 = parseFloat(tp1.toFixed(decimals));
@@ -448,7 +491,49 @@ export function calculateProfessionalSLTP(params: {
 
   const rr = parseFloat((Math.abs(tp2 - entry) / Math.abs(sl - entry)).toFixed(1));
 
-  return { sl, tp1, tp2, tp3, rr, slReason, tp1Reason, tp2Reason, tp3Reason };
+  // Calculate risk metrics for fundednext
+  let riskPct: number | undefined;
+  let riskDollar: number | undefined;
+  let recommendedLots: string | undefined;
+  if (mode === 'fundednext') {
+    const finalSLDistance = Math.abs(sl - entry);
+    riskPct = parseFloat(((finalSLDistance / entry) * 100).toFixed(2));
+    riskDollar = parseFloat(((finalSLDistance / entry) * accountSize).toFixed(2));
+    
+    // Calculate recommended position size (lots) based on max risk of 1% ($60)
+    const targetRiskDollar = accountSize * 0.01; // 1% = $60
+    // Pip value varies by instrument:
+    // Forex (EUR/USD, GBP/USD): $10/pip per standard lot, $1/pip per mini, $0.10/pip per micro
+    // XAU/USD: $1 per $0.01 move per oz, 100 oz per lot → $1/pip per 1 oz
+    // XAG/USD: similar concept
+    // Simplified: lots = targetRisk / (slDistance * pipValuePerLot)
+    let pipValuePerPoint: number;
+    if (pair === 'XAU/USD') {
+      // Gold: 1 standard lot = 100 oz, $0.01 move = $1 per oz, so $100 per lot per $1 move
+      pipValuePerPoint = 100; // $100 per $1 price move per standard lot
+    } else if (pair === 'XAG/USD') {
+      // Silver: 1 standard lot = 5000 oz, $0.01 move = $50 per lot
+      pipValuePerPoint = 50; // $50 per $1 price move per standard lot  
+    } else if (pair.includes('JPY')) {
+      // JPY pairs: pip = 0.01, $1000 per pip per standard lot (approx)
+      pipValuePerPoint = 1000; // $1000 per 1.00 price move per standard lot
+    } else {
+      // Standard forex (EUR/USD, GBP/USD): pip = 0.0001, $10 per pip per standard lot
+      pipValuePerPoint = 100000; // $100000 per 1.00 price move per standard lot
+    }
+    const lots = targetRiskDollar / (finalSLDistance * pipValuePerPoint);
+    
+    // Round to appropriate precision
+    if (lots >= 1) {
+      recommendedLots = lots.toFixed(2);
+    } else if (lots >= 0.1) {
+      recommendedLots = lots.toFixed(2);
+    } else {
+      recommendedLots = lots.toFixed(2);
+    }
+  }
+
+  return { sl, tp1, tp2, tp3, rr, slReason, tp1Reason, tp2Reason, tp3Reason, riskPct, riskDollar, recommendedLots };
 }
 
 // ─── EXIT MANAGEMENT SYSTEM ─────────────────────────────────────────
@@ -539,7 +624,7 @@ export function calculateExitManagement(params: {
   // FundedNext-specific rules
   if (mode === 'fundednext') {
     exitRules.push(`🏆 FUNDEDNEXT 6K RULES:`);
-    exitRules.push(`• Max risk per trade: 1% ($60) — SL must not exceed $60 risk`);
+    exitRules.push(`• Max risk per trade: 1%-1.5% ($60-$90) — SL is auto-capped to enforce this`);
     exitRules.push(`• Daily loss limit: 5% ($300) — if down $200+, STOP trading`);
     exitRules.push(`• Max loss limit: 10% ($600) — total drawdown cannot exceed this`);
     exitRules.push(`• Phase 1 target: 8% ($480 profit) — be patient, quality over quantity`);

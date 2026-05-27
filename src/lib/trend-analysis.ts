@@ -375,6 +375,12 @@ export function calculateSLTPDistances(
       tp1Mult = 2.4;
       tp2Mult = 3.5;
       break;
+    case 'fundednext':
+      // FundedNext: SL capped at 1.5% of account max, use moderate ATR
+      slMult = 1.0; // Tighter than swing (1.5) to keep risk within 1%-1.5%
+      tp1Mult = 2.0; // 1:2 RR target
+      tp2Mult = 3.0; // 1:3 RR target
+      break;
     default: // swing
       slMult = 1.5;
       tp1Mult = 3.0;

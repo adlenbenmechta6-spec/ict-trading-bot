@@ -11,7 +11,7 @@ import dynamic from 'next/dynamic';
 const TradingViewChart = dynamic(() => import('@/components/TradingViewChart'), { ssr: false });
 
 // ─── Trading Modes & Timeframes ─────────────────────────────────────
-type TradingMode = 'swing' | 'daytrading' | 'scalping' | 'fundednext';
+type TradingMode = 'swing' | 'daytrading' | 'scalping' | 'fundednext' | 'dailyscan';
 
 interface TradingModeConfig {
   id: TradingMode;
@@ -64,6 +64,16 @@ const TRADING_MODES: TradingModeConfig[] = [
     timeframes: ['H4', 'D1'],
     defaultTF: 'H4',
     holdTime: '1-7 days',
+  },
+  {
+    id: 'dailyscan',
+    label: 'Daily Pro Scanner',
+    shortLabel: 'Daily',
+    emoji: '🎯',
+    description: 'Deep Daily Analysis',
+    timeframes: ['H4', 'D1'],
+    defaultTF: 'H4',
+    holdTime: 'Today',
   },
 ];
 
@@ -129,14 +139,22 @@ interface SignalData {
   chartData?: ChartData;
 }
 
+interface DailyScanData {
+  topPairs: Array<{pair: string; score: number; trend: string; trendStrength: number; structure: string; rsi: number; killZone: string; killZoneAr: string; dayRank: string; opportunity: string; currentPrice: number; changePercent: number; ictPatterns: string[]; isPremium: boolean; isDiscount: boolean}>;
+  signals: SignalData[];
+  sessionInfo: {currentSession: string; killZone: string; killZoneActive: boolean; dayOfWeek: string; algeriaTime: string; dayQuality: string; dayScore: number; bestWindow: string};
+  summary: string;
+}
+
 interface ChatMessage {
   id: string;
-  type: 'bot' | 'user' | 'signal' | 'analysis' | 'scan' | 'system';
+  type: 'bot' | 'user' | 'signal' | 'analysis' | 'scan' | 'dailyscan' | 'system';
   content: string;
   timestamp: Date;
   signalData?: SignalData;
   scanData?: Array<{ pair: string; name: string; currentPrice: number; trend: string; opportunity: string; score: number }>;
   scanSummary?: string;
+  dailyScanData?: DailyScanData;
   chartData?: ChartData;
 }
 
@@ -159,6 +177,7 @@ const MODE_BADGE: Record<TradingMode, string> = {
   daytrading: 'bg-blue-500/20 text-blue-300 border-blue-500/20',
   scalping: 'bg-orange-500/20 text-orange-300 border-orange-500/20',
   fundednext: 'bg-purple-500/20 text-purple-300 border-purple-500/20',
+  dailyscan: 'bg-rose-500/20 text-rose-300 border-rose-500/20',
 };
 
 // ─── Signal Card ─────────────────────────────────────────────────────
@@ -413,6 +432,104 @@ function SignalCard({ signal, mode }: { signal: SignalData; mode: TradingMode })
   );
 }
 
+// ─── Daily Scan Card ──────────────────────────────────────────────────
+function DailyScanCard({ data }: { data: DailyScanData }) {
+  const { sessionInfo, topPairs, signals, summary } = data;
+
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return 'text-emerald-400';
+    if (score >= 70) return 'text-emerald-300';
+    if (score >= 55) return 'text-yellow-400';
+    if (score >= 40) return 'text-orange-400';
+    return 'text-gray-500';
+  };
+
+  const getScoreBg = (score: number) => {
+    if (score >= 80) return 'bg-emerald-500/20 border-emerald-500/30';
+    if (score >= 70) return 'bg-emerald-500/15 border-emerald-500/20';
+    if (score >= 55) return 'bg-yellow-500/15 border-yellow-500/20';
+    if (score >= 40) return 'bg-orange-500/15 border-orange-500/20';
+    return 'bg-gray-500/10 border-gray-500/20';
+  };
+
+  const getTrendEmoji = (trend: string) => {
+    if (trend === 'bullish') return '🟢';
+    if (trend === 'bearish') return '🔴';
+    return '🟡';
+  };
+
+  return (
+    <div className="rounded-xl overflow-hidden border border-rose-500/30 bg-rose-950/10">
+      {/* Header — Session Info */}
+      <div className="px-4 py-3 bg-gradient-to-r from-rose-600/20 via-rose-500/10 to-pink-600/20 border-b border-rose-500/20">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-2xl">🎯</span>
+          <span className="text-rose-300 font-bold text-lg">Daily Pro Scanner</span>
+          <span className="text-rose-400/50 text-xs ml-auto font-mono">{sessionInfo.algeriaTime}</span>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${sessionInfo.killZoneActive ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-white/5 text-gray-400 border border-white/10'}`}>
+            <Clock className="w-3 h-3" />
+            {sessionInfo.killZone}
+          </div>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${sessionInfo.dayScore >= 10 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/20' : sessionInfo.dayScore >= 0 ? 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/20' : 'bg-red-500/15 text-red-300 border border-red-500/20'}`}>
+            <CalendarDays className="w-3 h-3" />
+            {sessionInfo.dayOfWeek} — {sessionInfo.dayQuality}
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-300 border border-rose-500/20">
+            {sessionInfo.killZoneActive ? '🔥 LIVE' : '⏸️'} {sessionInfo.bestWindow}
+          </div>
+        </div>
+      </div>
+
+      {/* All Pairs Ranked */}
+      <div className="px-4 py-3">
+        <div className="text-xs text-rose-400 font-bold mb-2 uppercase tracking-wider">📊 All Pairs Ranked — الترتيب حسب الفرص</div>
+        <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1" style={{scrollbarWidth: 'thin', scrollbarColor: '#4a2030 transparent'}}>
+          {topPairs.map((p, i) => (
+            <div key={p.pair} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${getScoreBg(p.score)} transition-all`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-gray-500 text-xs font-mono w-5 shrink-0">{i + 1}.</span>
+                <span className="text-white font-semibold text-sm truncate">{p.pair}</span>
+                <span className={getTrendEmoji(p.trend)} />
+                <span className={`text-xs font-medium ${p.trend === 'bullish' ? 'text-emerald-400' : p.trend === 'bearish' ? 'text-red-400' : 'text-yellow-400'}`}>{p.trend.toUpperCase()}</span>
+                {p.ictPatterns.length > 0 && (
+                  <span className="text-[10px] text-amber-400/70">+{p.ictPatterns.length} ICT</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-gray-400 text-xs font-mono hidden sm:inline">RSI {p.rsi}</span>
+                <div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${p.score >= 70 ? 'bg-emerald-400' : p.score >= 55 ? 'bg-yellow-400' : 'bg-gray-500'}`} style={{ width: `${p.score}%` }} />
+                </div>
+                <span className={`font-bold text-sm ${getScoreColor(p.score)} w-8 text-right`}>{p.score}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Signals for top pairs */}
+      {signals.length > 0 && (
+        <div className="px-4 py-3 border-t border-rose-500/15">
+          <div className="text-xs text-rose-400 font-bold mb-3 uppercase tracking-wider">🎯 A+/A Signals — إشارات عالية الجودة ({signals.length})</div>
+          <div className="space-y-3">
+            {signals.map((signal, i) => (
+              <SignalCard key={i} signal={signal} mode="dailyscan" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* AI Summary */}
+      <div className="px-4 py-3 border-t border-rose-500/15 bg-black/20">
+        <div className="text-xs text-rose-400 font-bold mb-2 uppercase tracking-wider">🤖 AI Summary — ملخص</div>
+        <div className="text-gray-200 text-sm whitespace-pre-wrap leading-relaxed">{summary}</div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Scan Card ───────────────────────────────────────────────────────
 function ScanCard({ results, summary }: { results: ChatMessage['scanData']; summary: string }) {
   if (!results) return null;
@@ -508,6 +625,23 @@ function MessageBubble({ msg, mode }: { msg: ChatMessage; mode: TradingMode }) {
     );
   }
 
+  if (msg.type === 'dailyscan' && msg.dailyScanData) {
+    return (
+      <div className="flex gap-2.5 my-2 max-w-[95%]">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center">
+          <Bot className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-rose-400 text-sm font-semibold">🎯 Daily Pro Scanner</span>
+            <span className="text-gray-500 text-xs">{formatTime(msg.timestamp)}</span>
+          </div>
+          <DailyScanCard data={msg.dailyScanData} />
+        </div>
+      </div>
+    );
+  }
+
   if (msg.type === 'user') {
     return (
       <div className="flex gap-2.5 my-1.5 justify-end">
@@ -572,6 +706,7 @@ I combine two powerful methodologies:
 📊 Day Trading — M15/M30/H1 (same day)
 ⚡ Scalping — M1/M5 (seconds-minutes)
 🏆 FundedNext 6K — Strict rules for prop firm challenge
+🎯 Daily Pro Scanner — Deep daily analysis for ALL pairs
 
 Choose your style in the header, then use the buttons below!
 ⚠️ Trading involves risk — these are educational analyses`,
@@ -716,6 +851,45 @@ export default function Home() {
     }, 1000, 2000);
   }, [addMessage, simulateTyping]);
 
+  // Daily Pro Scanner
+  const handleDailyScan = useCallback(async () => {
+    addMessage({ type: 'user', content: '🎯 Daily Pro Scanner — Deep analysis for ALL pairs' });
+    simulateTyping(async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60000);
+        const res = await fetch('/api/trading/daily-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: tradingMode === 'fundednext' ? 'fundednext' : 'swing' }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        const data = await res.json();
+        if (data.success && data.topPairs) {
+          addMessage({
+            type: 'dailyscan',
+            content: '',
+            dailyScanData: {
+              topPairs: data.topPairs,
+              signals: data.signals || [],
+              sessionInfo: data.sessionInfo,
+              summary: data.summary,
+            },
+          });
+        } else {
+          addMessage({ type: 'bot', content: `❌ ${data.error || 'Daily scan failed.'}` });
+        }
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          addMessage({ type: 'bot', content: '⏱️ Daily scan timed out. This can take up to 60 seconds — please try again.' });
+        } else {
+          addMessage({ type: 'bot', content: '❌ Connection error. Please try again.' });
+        }
+      }
+    }, 1500, 3000);
+  }, [tradingMode, addMessage, simulateTyping]);
+
   // Send chat message
   const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim() || isTyping) return;
@@ -737,6 +911,10 @@ export default function Home() {
     }
     if (msg.toLowerCase().includes('scan') || msg.toLowerCase().includes('market')) {
       handleScan();
+      return;
+    }
+    if (msg.toLowerCase().includes('daily') || msg.toLowerCase().includes('pro scan')) {
+      handleDailyScan();
       return;
     }
 
@@ -765,7 +943,7 @@ export default function Home() {
         }
       }
     }, 1000, 2000);
-  }, [inputValue, isTyping, addMessage, simulateTyping, handleGetSignal, handleAnalyze, handleScan]);
+  }, [inputValue, isTyping, addMessage, simulateTyping, handleGetSignal, handleAnalyze, handleScan, handleDailyScan]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
@@ -782,6 +960,7 @@ export default function Home() {
       case 'daytrading': return `${base} bg-blue-600/30 text-blue-300 border-blue-500/40 shadow-lg shadow-blue-500/10`;
       case 'scalping': return `${base} bg-orange-600/30 text-orange-300 border-orange-500/40 shadow-lg shadow-orange-500/10`;
       case 'fundednext': return `${base} bg-purple-600/30 text-purple-300 border-purple-500/40 shadow-lg shadow-purple-500/10`;
+      case 'dailyscan': return `${base} bg-rose-600/30 text-rose-300 border-rose-500/40 shadow-lg shadow-rose-500/10`;
     }
   };
 
@@ -794,6 +973,7 @@ export default function Home() {
       case 'daytrading': return `${base} bg-blue-600/40 text-blue-300`;
       case 'scalping': return `${base} bg-orange-600/40 text-orange-300`;
       case 'fundednext': return `${base} bg-purple-600/40 text-purple-300`;
+      case 'dailyscan': return `${base} bg-rose-600/40 text-rose-300`;
     }
   };
 
@@ -918,14 +1098,17 @@ export default function Home() {
       {/* Quick Actions */}
       <div className="flex-shrink-0 px-3 py-2 border-t border-white/5 bg-[#0e1621]">
         <div className="flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          <button onClick={() => handleGetSignal()} disabled={isTyping} className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-emerald-500/20">
-            <TrendingUp className="w-3.5 h-3.5" /> Signal
+          <button onClick={() => tradingMode === 'dailyscan' ? handleDailyScan() : handleGetSignal()} disabled={isTyping} className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-emerald-500/20">
+            <TrendingUp className="w-3.5 h-3.5" /> {tradingMode === 'dailyscan' ? 'Daily Scan' : 'Signal'}
           </button>
           <button onClick={() => handleAnalyze()} disabled={isTyping} className="flex items-center gap-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-blue-500/20">
             <BarChart3 className="w-3.5 h-3.5" /> Analyze
           </button>
           <button onClick={handleScan} disabled={isTyping} className="flex items-center gap-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-purple-500/20">
             <Search className="w-3.5 h-3.5" /> Scan
+          </button>
+          <button onClick={handleDailyScan} disabled={isTyping} className="flex items-center gap-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-rose-500/20">
+            🎯 Daily
           </button>
           <button onClick={() => { setInputValue('What is an Order Block?'); }} disabled={isTyping} className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap disabled:opacity-50 border border-amber-500/20">
             🏦 OB
@@ -956,7 +1139,7 @@ export default function Home() {
           </button>
         </div>
         <div className="flex items-center justify-between mt-1.5 px-1">
-          <span className="text-gray-500 text-xs">💡 Signal / Analyze / Scan | 🏦 ICT + 🕯️ Candlesticks | 📊 TradingView</span>
+          <span className="text-gray-500 text-xs">💡 Signal / Analyze / Scan / Daily | 🏦 ICT + 🕯️ Candlesticks | 📊 TradingView</span>
           <span className="text-gray-600 text-xs">⚠️ Edu only</span>
         </div>
       </div>

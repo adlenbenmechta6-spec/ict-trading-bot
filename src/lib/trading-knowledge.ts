@@ -226,6 +226,12 @@ export const PAIRS = [
   { symbol: 'AUD/USD', name: 'Aussie/Dollar', category: 'Forex' },
   { symbol: 'USD/CAD', name: 'Dollar/Cad', category: 'Forex' },
   { symbol: 'NZD/USD', name: 'Kiwi/Dollar', category: 'Forex' },
+  { symbol: 'GBP/CHF', name: 'Pound/Swiss', category: 'Forex' },
+  { symbol: 'GBP/CAD', name: 'Pound/Cad', category: 'Forex' },
+  { symbol: 'USD/CHF', name: 'Dollar/Swiss', category: 'Forex' },
+  { symbol: 'AUD/CAD', name: 'Aussie/Cad', category: 'Forex' },
+  { symbol: 'NZD/CAD', name: 'Kiwi/Cad', category: 'Forex' },
+  { symbol: 'NZD/JPY', name: 'Kiwi/Yen', category: 'Forex' },
 ];
 
 export const TIMEFRAMES = [

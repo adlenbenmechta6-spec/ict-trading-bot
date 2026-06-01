@@ -300,8 +300,8 @@ export function aiContradictsTrend(
 // ─── ICT Instrument Tier Classification ──────────────────────────────
 export function getICTInstrumentTier(pair: string): string {
   const tier1 = ['EUR/USD', 'GBP/USD', 'XAU/USD', 'XAG/USD', 'NAS100'];
-  const tier2 = ['USD/JPY', 'GBP/JPY', 'US30', 'US500'];
-  const tier3 = ['AUD/USD', 'USD/CAD', 'NZD/USD', 'EUR/GBP', 'USD/CHF'];
+  const tier2 = ['USD/JPY', 'GBP/JPY', 'US30', 'US500', 'USD/CAD', 'NZD/USD'];
+  const tier3 = ['AUD/USD', 'EUR/GBP', 'USD/CHF', 'GBP/CHF', 'GBP/CAD', 'AUD/CAD', 'NZD/CAD', 'NZD/JPY'];
   const tier4 = ['BTC/USD', 'ETH/USD'];
 
   if (tier1.includes(pair)) return 'Tier 1';

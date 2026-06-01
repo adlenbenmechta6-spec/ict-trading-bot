@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
     const dayInfo = getDayScore(algeria.dayOfWeek);
     const kzInfo = getKillZoneScore(algeria.hour);
 
-    const allPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'XAG/USD', 'BTC/USD', 'ETH/USD', 'US30', 'NAS100', 'GBP/JPY', 'AUD/USD'];
+    const allPairs = PAIRS.map(p => p.symbol);
 
     // ─── Step 1: Fetch all prices in parallel ────────────────────────
     console.log(`[DAILY SCAN] Starting deep scan for ${allPairs.length} pairs...`);

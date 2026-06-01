@@ -163,6 +163,11 @@ const YAHOO_SYMBOLS: Record<string, string> = {
   'NZD/USD': 'NZDUSD=X',
   'USD/CHF': 'USDCHF=X',
   'EUR/GBP': 'EURGBP=X',
+  'GBP/CHF': 'GBPCHF=X',
+  'GBP/CAD': 'GBPCAD=X',
+  'AUD/CAD': 'AUDCAD=X',
+  'NZD/CAD': 'NZDCAD=X',
+  'NZD/JPY': 'NZDJPY=X',
 };
 
 function isValidPrice(pair: string, price: number): boolean {
@@ -183,6 +188,11 @@ function isValidPrice(pair: string, price: number): boolean {
     'NZD/USD': [0.5, 0.75],
     'USD/CHF': [0.8, 1.05],
     'EUR/GBP': [0.8, 0.95],
+    'GBP/CHF': [1.05, 1.35],
+    'GBP/CAD': [1.6, 1.95],
+    'AUD/CAD': [0.82, 0.98],
+    'NZD/CAD': [0.75, 0.92],
+    'NZD/JPY': [80, 115],
   };
   const range = ranges[pair];
   if (!range) return price > 0;
@@ -195,6 +205,9 @@ function buildMarketData(pair: string, price: number, source: string, extra?: Pa
     'XAU/USD': 0.008, 'XAG/USD': 0.012, 'BTC/USD': 0.03, 'ETH/USD': 0.035,
     'EUR/USD': 0.005, 'GBP/USD': 0.006, 'USD/JPY': 0.006,
     'US30': 0.008, 'NAS100': 0.012, 'US500': 0.008,
+    'GBP/JPY': 0.007, 'AUD/USD': 0.005, 'USD/CAD': 0.005,
+    'NZD/USD': 0.006, 'USD/CHF': 0.005, 'GBP/CHF': 0.006,
+    'GBP/CAD': 0.007, 'AUD/CAD': 0.005, 'NZD/CAD': 0.006, 'NZD/JPY': 0.007,
   };
   const vol = volMap[pair] || 0.006;
   const dailyRange = price * vol;
@@ -830,7 +843,9 @@ function getFallbackOHLCV(pair: string, timeframe: string): OHLCVData {
     'EUR/USD': 1.16200, 'GBP/USD': 1.34400, 'USD/JPY': 159.00,
     'XAU/USD': 4547.00, 'XAG/USD': 78.00, 'BTC/USD': 77000, 'ETH/USD': 2100,
     'US30': 42000, 'NAS100': 19500, 'US500': 5900,
-    'GBP/JPY': 213.70, 'AUD/USD': 0.64500,
+    'GBP/JPY': 213.70, 'AUD/USD': 0.64500, 'USD/CAD': 1.36500, 'NZD/USD': 0.61500,
+    'USD/CHF': 0.88200, 'GBP/CHF': 1.18300, 'GBP/CAD': 1.83500,
+    'AUD/CAD': 0.88200, 'NZD/CAD': 0.83800, 'NZD/JPY': 97.80,
   };
 
   const currentPrice = basePrices[pair] || 1.0;
@@ -988,6 +1003,11 @@ const TWELVE_SYMBOL_MAP: Record<string, string> = {
   'NZD/USD': 'NZD/USD',
   'USD/CHF': 'USD/CHF',
   'EUR/GBP': 'EUR/GBP',
+  'GBP/CHF': 'GBP/CHF',
+  'GBP/CAD': 'GBP/CAD',
+  'AUD/CAD': 'AUD/CAD',
+  'NZD/CAD': 'NZD/CAD',
+  'NZD/JPY': 'NZD/JPY',
 };
 
 // ETF price to actual instrument price conversion
@@ -1018,6 +1038,11 @@ const TRADINGVIEW_SYMBOL_MAP: Record<string, { scannerType: string; ticker: stri
   'NZD/USD': { scannerType: 'forex', ticker: 'FX:NZDUSD' },
   'USD/CHF': { scannerType: 'forex', ticker: 'FX:USDCHF' },
   'EUR/GBP': { scannerType: 'forex', ticker: 'FX:EURGBP' },
+  'GBP/CHF': { scannerType: 'forex', ticker: 'FX:GBPCHF' },
+  'GBP/CAD': { scannerType: 'forex', ticker: 'FX:GBPCAD' },
+  'AUD/CAD': { scannerType: 'forex', ticker: 'FX:AUDCAD' },
+  'NZD/CAD': { scannerType: 'forex', ticker: 'FX:NZDCAD' },
+  'NZD/JPY': { scannerType: 'forex', ticker: 'FX:NZDJPY' },
 };
 
 // Twelve Data interval mapping for OHLCV

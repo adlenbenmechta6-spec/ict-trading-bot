@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     // ─── CRITICAL FIX: Fetch OHLCV for trend detection ───────────────
     // Fetch OHLCV for top pairs to get real trend
     const trendMap: Record<string, 'bullish' | 'bearish' | 'ranging'> = {};
-    const topPairs = ['XAU/USD', 'XAG/USD', 'EUR/USD', 'GBP/USD', 'NAS100', 'USD/JPY', 'US30'];
+    const topPairs = ['XAU/USD', 'XAG/USD', 'EUR/USD', 'GBP/USD', 'NAS100', 'USD/JPY', 'US30', 'GBP/JPY', 'USD/CAD', 'NZD/USD', 'GBP/CHF', 'AUD/USD'];
     const ohlcvPromises = topPairs.map(async (pair) => {
       try {
         const ohlcv = await fetchOHLCVData(pair, 'H4');

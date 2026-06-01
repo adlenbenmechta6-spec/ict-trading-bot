@@ -168,7 +168,8 @@ function generateId(): string {
 
 const TRADING_PAIRS = [
   'EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'XAG/USD', 'BTC/USD', 'ETH/USD',
-  'US30', 'NAS100', 'GBP/JPY', 'AUD/USD',
+  'US30', 'NAS100', 'GBP/JPY', 'AUD/USD', 'USD/CAD', 'NZD/USD',
+  'GBP/CHF', 'GBP/CAD', 'USD/CHF', 'AUD/CAD', 'NZD/CAD', 'NZD/JPY',
 ];
 
 // Mode badge colors for SignalCard
@@ -900,12 +901,12 @@ export default function Home() {
 
     // Quick command detection
     if (msg.toLowerCase().includes('signal') || msg.toLowerCase().includes('trade')) {
-      const pairMatch = msg.match(/(EUR\/USD|GBP\/USD|USD\/JPY|XAU\/USD|BTC\/USD|ETH\/USD|US30|NAS100|GBP\/JPY|AUD\/USD)/i);
+      const pairMatch = msg.match(/(EUR\/USD|GBP\/USD|USD\/JPY|XAU\/USD|XAG\/USD|BTC\/USD|ETH\/USD|US30|NAS100|GBP\/JPY|AUD\/USD|USD\/CAD|NZD\/USD|GBP\/CHF|GBP\/CAD|USD\/CHF|AUD\/CAD|NZD\/CAD|NZD\/JPY)/i);
       handleGetSignal(pairMatch ? pairMatch[1].toUpperCase() : undefined);
       return;
     }
     if (msg.toLowerCase().includes('analyze') || msg.toLowerCase().includes('analysis')) {
-      const pairMatch = msg.match(/(EUR\/USD|GBP\/USD|USD\/JPY|XAU\/USD|BTC\/USD|ETH\/USD|US30|NAS100|GBP\/JPY|AUD\/USD)/i);
+      const pairMatch = msg.match(/(EUR\/USD|GBP\/USD|USD\/JPY|XAU\/USD|XAG\/USD|BTC\/USD|ETH\/USD|US30|NAS100|GBP\/JPY|AUD\/USD|USD\/CAD|NZD\/USD|GBP\/CHF|GBP\/CAD|USD\/CHF|AUD\/CAD|NZD\/CAD|NZD\/JPY)/i);
       handleAnalyze(pairMatch ? pairMatch[1].toUpperCase() : undefined);
       return;
     }

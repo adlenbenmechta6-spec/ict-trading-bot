@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if user is asking about a specific pair's price
-    const pairMatch = message.match(/(?:price|analysis|analyze|rate)\s*(?:of|for)?\s*(EUR\/USD|GBP\/USD|USD\/JPY|XAU\/USD|BTC\/USD|ETH\/USD|US30|NAS100|US500|GBP\/JPY|AUD\/USD|USD\/CAD|NZD\/USD)/i);
+    const pairMatch = message.match(/(?:price|analysis|analyze|rate)\s*(?:of|for)?\s*(EUR\/USD|GBP\/USD|USD\/JPY|XAU\/USD|XAG\/USD|BTC\/USD|ETH\/USD|US30|NAS100|US500|GBP\/JPY|AUD\/USD|USD\/CAD|NZD\/USD|USD\/CHF|GBP\/CHF|GBP\/CAD|AUD\/CAD|NZD\/CAD|NZD\/JPY)/i);
 
     let priceContext = '';
     if (pairMatch) {

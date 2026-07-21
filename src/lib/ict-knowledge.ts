@@ -4,12 +4,14 @@
 // Plus ICT 2016-2017 Core Content (All 12 Months of Mentorship)
 // Plus Smart Money Concept (SMC) by WADE_FX_SETUPS
 // Plus Forex Price Action Scalping by Bob Volman
+// Plus "Demystifying ICT: What Every ICT Trader Still Wants To Know" by HOPIPLAKA (2023)
 
 import { ICT_CORE_CONTENT, ICT_BEST_INSTRUMENTS, ICT_TRADING_MODELS } from './ict-core-content';
 import { SMC_KNOWLEDGE, SMC_TRADING_RULES } from './smc-knowledge';
 import { ICT_2022_COURSE, ICT_2022_SETUPS, ICT_2022_SESSIONS, ICT_2022_RULES, ICT_2022_SIGNAL_CHECKLIST } from './ict-2022-course';
 import { CANDLESTICK_KNOWLEDGE } from './trading-knowledge';
 import { VOLMAN_SCALPING_COURSE, VOLMAN_SCALPING_RULES, VOLMAN_SCALPING_PAIRS } from './volman-scalping-knowledge';
+import { ICT_DEMYSTIFYING_COURSE, ICT_DEMYSTIFYING_SYSTEM_PROMPT_ADDENDUM } from './ict-demystifying-knowledge';
 
 // Combine all knowledge into one comprehensive reference
 export const ICT_KNOWLEDGE = `
@@ -273,6 +275,18 @@ ${VOLMAN_SCALPING_RULES}
 ---
 
 ${VOLMAN_SCALPING_PAIRS}
+
+---
+
+# DEMYSTIFYING ICT — "WHAT EVERY ICT TRADER STILL WANTS TO KNOW"
+# Based on "Demystifying ICT: What Every ICT Trader Still Wants To Know" by HOPIPLAKA (Version 1.0, January 2023)
+# Covers the 3-6-9 mathematical backbone of ICT methodology:
+#   - Number 3: Power of Three (PO3) dealing ranges
+#   - Number 6: Huddleston / Goldbach clusters (7 clusters of 100)
+#   - Number 9: 20-40-60 Lookback partitions (18-27-36-45-54-63-72-81-99-108-117-126)
+# Plus the ICT Logo's true AMD fractal meaning (Chapter 4)
+
+${ICT_DEMYSTIFYING_COURSE}
 `;
 
 export const ICT_SIGNAL_SYSTEM_PROMPT = `You are a PROFESSIONAL INSTITUTIONAL TRADER and expert trading signal provider, like the elite traders who post high-quality signals on Telegram channels. Your name is "ICT Pro Bot".
@@ -443,7 +457,8 @@ CRITICAL PROFESSIONAL RULES:
 - Think like Smart Money: enter when retail exits, exit when retail enters
 - Structure means nothing without narrative — always explain the STORY behind the trade
 
-Always respond in English. Be professional and objective. Do not promise guaranteed results - trading involves risk.`;
+Always respond in English. Be professional and objective. Do not promise guaranteed results - trading involves risk.
+${ICT_DEMYSTIFYING_SYSTEM_PROMPT_ADDENDUM}`;
 
 export const ICT_ANALYSIS_SYSTEM_PROMPT = `You are an expert financial market analyst combining Japanese Candlestick analysis, ICT Smart Money methodology, ICT 2022 Mentorship Day Trading Model, and Smart Money Concepts (SMC). You perform comprehensive analysis including:
 
@@ -474,7 +489,8 @@ ICT 2022 Key Rules for Analysis:
 - News: Wait 10 min after high-impact news before analysis
 - Market process: Consolidation → Expansion → Retracement or Reversal (never Consolidation after Expansion)
 
-Provide detailed analysis in English. Be precise and professional.`;
+Provide detailed analysis in English. Be precise and professional.
+${ICT_DEMYSTIFYING_SYSTEM_PROMPT_ADDENDUM}`;
 
 export const ICT_SCAN_SYSTEM_PROMPT = `You are an expert market scanner combining Japanese Candlestick analysis, ICT Smart Money methodology, and Smart Money Concepts (SMC). You scan multiple pairs looking for potential trading opportunities.
 
@@ -495,4 +511,5 @@ Best instruments for ICT/SMC: XAU/USD (#1), EUR/USD (#2), GBP/USD (#3), NAS100 (
 These show the cleanest ICT/SMC patterns with highest FVG fill rates and OB reliability.
 Key SMC Rule: The market HARDLY reverses without taking liquidity first!
 
-Rank opportunities by SMC confluence score and probability. Respond in English.`;
+Rank opportunities by SMC confluence score and probability. Respond in English.
+${ICT_DEMYSTIFYING_SYSTEM_PROMPT_ADDENDUM}`;

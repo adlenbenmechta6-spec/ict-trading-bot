@@ -34,13 +34,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Try AI first — now using FULL knowledge pipeline (all 6 sources)
+    // Try AI first — now using FULL knowledge pipeline (all 8 sources)
     const aiResponse = await chatCompletion({
       systemPrompt: `${ICT_SIGNAL_SYSTEM_PROMPT}
 
 ${PROFESSIONAL_TRADER_MINDSET}
 
-You are ICT Pro Bot - a professional trading assistant trained on 7 comprehensive knowledge sources:
+You are ICT Pro Bot - a professional trading assistant trained on 8 comprehensive knowledge sources:
 
 📚 **Source 1: Japanese Candlesticks** (Fred K.H. Tam) — All major/reversal/continuation patterns, volume analysis, practical application
 📚 **Source 2: ICT 2016-2017 Core Content** — All 12 Months of Mentorship by Michael J. Huddleston
@@ -49,6 +49,11 @@ You are ICT Pro Bot - a professional trading assistant trained on 7 comprehensiv
 📚 **Source 5: Professional Trading Rules** — 10 Commandments, Signal Quality Tiers (A+/A/B/C/F), Entry Sequence, Exit Management
 📚 **Source 6: ICT Pattern Detection** — Real-time OB, FVG, MSS, Liquidity Sweep detection in OHLCV data
 📚 **Source 7: Forex Price Action Scalping** (Bob Volman) — 7 Professional Scalping Setups (DDB, FB, SB, BB, RB, IRB, ARB), Tipping Point Technique, 20ema trend guide, tick chart analysis, scalping pair selection
+📚 **Source 8: Demystifying ICT — What Every ICT Trader Still Wants To Know** (HOPIPLAKA, 2023) — The 3-6-9 mathematical backbone of ICT:
+   • Number 3 → PO3 dealing ranges (3, 9, 27, 81, 243, 729, 2187, 6561, 19683) and the formula DR Low = FLOOR(price/PO3) × PO3, DR High = DR Low + PO3
+   • Number 6 → Huddleston / Goldbach clusters (7 prime pairs summing to 100) and the 14 IPDA levels (0=HIGH, 3=Rejection Block, 11=OB, 17=FVG, 29=Liquidity Void, 41=Breaker, 47=Mitigation Block, 53=Mitigation Block, 59=Breaker, 71=Liquidity Void, 83=FVG, 89=OB, 97=Rejection Block, 100=LOW)
+   • Number 9 → 20-40-60 Lookback partitions (18=Jan 8, 27=Feb 7, 36=Mar 6, 45=Apr 5, 54=May 4, 63=Jun 3, 72=Jul 2, 81=Aug 1, 99=Sep 9, 108=Oct 8, 117=Nov 7, 126=Dec 6) and the HIPPO (Hidden Interbank Price Point Objective)
+   • Plus: CE vs Mean Threshold, External Range Demarkers (1.111 / -0.111 → PO3^(-2) stop runs), Algo 1 (MMxM) vs Algo 2 (Trending/OTE), fractal AMD cycles and CLS true-day timings (20:00–20:00 CET, London 05:00–11:00 CET, sweet spots London 07:30–08:30 CET & NY 14:30–16:30 CET)
 
 Best instruments for ICT:
 - Tier 1 (BEST): XAU/USD, EUR/USD, GBP/USD, NAS100
@@ -335,14 +340,158 @@ The primary signal for trend reversal — breaking a swing high/low with displac
 • Close below bullish delivery open = bearish shift
 
 💡 Trading tip: After MSS, look for FVG formation — enter at the FVG's 50% level (Consequent Encroachment) for the highest probability entry.`;
+    } else if (lowerMsg.includes('po3') || lowerMsg.includes('power of three') || lowerMsg.includes('dealing range')) {
+      response = `🔢 **Power of Three (PO3) — Dealing Ranges** — *Demystifying ICT, Chapter 1*
+
+PO3 numbers are powers of 3: 3, 9, 27, 81, 243, 729, 2187, 6561, 19683...
+
+**Trader Style Mapping:**
+• 27 → Scalping
+• 81 → Daily Range
+• 243 → Weekly Range
+• 729 → Monthly Range
+• 2187 → Yearly Range
+
+**How to Calculate a PO3 Dealing Range:**
+1. Normalize current price (remove decimal, keep first 5 digits). Example: EURUSD 1.2345 → 12345
+2. **DR Low** = FLOOR(price / PO3) × PO3 → e.g. FLOOR(12345/243)×243 = 50×243 = 12150
+3. **DR High** = DR Low + PO3 → 12150 + 243 = 12393
+4. Restore decimal point → DR Low = 1.2150, DR High = 1.2393
+
+**PO3 Stop Runs (2 types):**
+1. Real stop run — sweeps BSL/SSL by 27, 81 or 243 pips
+2. PO3-sized wick — forms a rejection block (use open/close to enter)
+
+**Range Expansion/Contraction:**
+• Breakout → expand to next PO3 (9 → 27 → 81 → 243 → 729 ...)
+• Retracement → contract to smaller PO3
+
+💡 Per Hopiplaka: Price tends to STAY INSIDE the current PO3 partition unless it breaks out — then it moves to the next partition.`;
+    } else if (lowerMsg.includes('huddleston') || lowerMsg.includes('goldbach') || lowerMsg.includes('ipda level')) {
+      response = `🎯 **Huddleston Levels = Goldbach Clusters** — *Demystifying ICT, Chapter 2*
+
+The name "Huddleston" decodes to "7 clusters of 100" (Michael = 7 letters, 7 archangels).
+
+**Goldbach's Conjecture:** Every even number > 2 is the sum of two primes. For 100, there are 7 prime pairs:
+
+| Cluster | Discount | Premium |
+|---------|----------|---------|
+| 1 | 0 | 100 |
+| 2 | 3 | 97 |
+| 3 | 11 | 89 |
+| 4 | 17 | 83 |
+| 5 | 29 | 71 |
+| 6 | 41 | 59 |
+| 7 | 47 | 53 |
+
+**14 IPDA Levels Mapped from Goldbach:**
+0=HIGH | 3=Rejection Block | 11=Order Block | 17=FVG | 29=Liquidity Void | 41=Breaker | 47=Mitigation Block | 53=Mitigation Block | 59=Breaker | 71=Liquidity Void | 83=FVG | 89=Order Block | 97=Rejection Block | 100=LOW
+
+**Key Insights:**
+• Levels are 6% apart (the number 6 from Tesla's quote)
+• The 29/71 cluster jumps 12% → this is the **Liquidity Void**
+• Consequent Encroachment (CE) = middle of a 6% block (every 3%)
+• Mean Threshold = middle of an 8% block (the order-block band, 3→11)
+• External Range Demarkers (ERD): Fib 1.111 / -0.111 → project PO3^(-2) stop run levels
+
+💡 Per Hopiplaka: The 14 IPDA levels inside any PO3 dealing range form the wireframe that price respects.`;
+    } else if (lowerMsg.includes('lookback') || lowerMsg.includes('20-40-60') || lowerMsg.includes('hippo') || lowerMsg.includes('20 40 60')) {
+      response = `📅 **20-40-60 Lookback Partitions** — *Demystifying ICT, Chapter 3*
+
+Uses the number 9 sequence: **18-27-36-45-54-63-72-81-99-108-117-126**
+
+**Anchor Points (12 per year, on daily chart):**
+• 18 = January 8
+• 27 = February 7
+• 36 = March 6
+• 45 = April 5
+• 54 = May 4
+• 63 = June 3
+• 72 = July 2
+• 81 = August 1
+• 99 = September 9 (no day 0, so add 9)
+• 108 = October 8
+• 117 = November 7
+• 126 = December 6
+
+*If the day falls on a weekend, use the next trading day (typically Monday).*
+
+**How to Use:**
+1. At the start of each new partition, look for a clue based on the partition number (e.g. October = 108)
+2. Look for a **stop run / FVG / OB** of that pip size in the previous 3 partitions (20-40-60 lookback)
+3. Expect price to aggressively reverse from this level
+4. Wait for a PO3 stop run in the opposite direction
+
+**HIPPO — Hidden Interbank Price Point Objective:**
+A "hidden" order block constructed from the wicks of 2 consecutive bars that form an FVG:
+• Take the top of the wick of the first candle
+• Connect it to the bottom of the wick of the second candle
+• The resulting zone is a high-probability reaction level
+
+💡 Per Hopiplaka: December is typically a consolidation profile; the PO3 stop run often sits below the current partition low — a hallmark of consolidation.`;
+    } else if (lowerMsg.includes('amd') || lowerMsg.includes('cls') || lowerMsg.includes('ict logo') || lowerMsg.includes('manipulation phase')) {
+      response = `🌀 **ICT Logo = Fractal AMD Cycle** — *Demystifying ICT, Chapter 4*
+
+The ICT logo is NOT a small circle with a big circle — it's a SMALL circle between TWO BIGGER circles = **Accumulation → Manipulation → Distribution**.
+
+**CLS True Day:** 20:00–20:00 CET (19:00–19:00 BST / 14:00–14:00 EST)
+
+**Daily AMD Mapping:**
+• **Accumulation** = Asian Session (9 hours)
+• **Manipulation** = London Open (6 hours, 05:00–11:00 CET) — forms the Judas swing
+• **Distribution** = New York Session (9 hours)
+
+**3-6-9 Encoded:**
+• 3 sessions
+• 6-hour manipulation window
+• 9-hour accumulation & distribution windows
+
+**Sweet Spots (Highest-Probability Manipulation Entries):**
+• London: 07:30–08:30 CET (01:30–02:30 EST)
+• New York: 14:30–16:30 CET (08:30–12:30 EST)
+
+**Fractal AMD inside each phase:**
+1. Small consolidation (accumulation)
+2. Market Structure Shift (MSS) — breaks the consolidation
+3. Retracement back into the broken zone → forms an OTE
+4. Expansion into a pool of interest (liquidity, FVG, OB)
+5. Reversal — typically occurs in the MIDDLE of the distribution cycle
+
+💡 Per Hopiplaka: Each phase contains a smaller AMD cycle because price is FRACTAL — yearly AMD → monthly AMD → daily AMD → intraday AMD.`;
+    } else if (lowerMsg.includes('erd') || lowerMsg.includes('external range') || lowerMsg.includes('consequent encroachment') || lowerMsg.includes('mean threshold')) {
+      response = `📐 **CE, Mean Threshold & External Range Demarkers** — *Demystifying ICT, Chapter 2*
+
+**Consequent Encroachment (CE):**
+- The middle of a 6% Goldbach block
+- Therefore a CE level exists every 3% inside the dealing range
+
+**Mean Threshold:**
+- The middle of the 8% Order Block band (3→11 or 97→89)
+- ICT uses a different name because the block is 8% (not 6%)
+- Located at 4% from the rejection block
+
+**External Range Demarkers (ERD):**
+- Add Fib values **1.111** (range high) and **-0.111** (range low) to your Fibonacci tool
+- These project a **PO3^(-2)** level outside the current dealing range
+- Examples:
+  • 2187 PO3 range → ERD shows a 243 stop run target (2 PO3 numbers below)
+  • 243 PO3 range → ERD shows a 27 stop run target
+- Use ERD to anticipate where price will go when it briefly breaches the dealing range
+- ERD can be cut in half — the middle of the ERD is highly sensitive
+
+💡 Per Hopiplaka: Big moves often START from an External Range Demarker — watch for reversals at these levels.`;
     } else {
-      response = `🤖 I'm ICT Pro Bot! I'm trained on the complete ICT 2016-2017 Core Content (All 12 Months). I can help you with:
+      response = `🤖 I'm ICT Pro Bot! I'm trained on 8 comprehensive knowledge sources — including the complete ICT 2016-2017 Core Content (All 12 Months) AND "Demystifying ICT" by HOPIPLAKA (2023).
 
 🕯️ **Candlestick Patterns:** Hammer, Engulfing, Morning/Evening Star, Doji, Harami, Three Soldiers/Crows
 🏦 **ICT PD-Arrays:** Order Blocks, FVG, Breaker Blocks, Rejection Blocks, Propulsion Blocks, Mitigation Blocks
 💧 **Liquidity:** BSL/SSL, Liquidity Sweeps/Runs, HRLR/LRLR, Liquidity Voids/Pools
 📊 **ICT Models:** AMD, Silver Bullet, OSOK, Bread & Butter, 2022 Models, Market Maker Models
-⏰ **Timing:** Kill Zones, Silver Bullet Windows, ICT Macros, CBDR
+⏰ **Timing:** Kill Zones, Silver Bullet Windows, ICT Macros, CBDR, CLS True Day
+🔢 **PO3 Dealing Ranges (NEW):** Power of Three — 27/81/243/729/2187, FLOOR formula, partitions, stop runs
+🎯 **Huddleston / Goldbach (NEW):** 7 prime clusters of 100, 14 IPDA levels, CE & Mean Threshold, ERD
+📅 **20-40-60 Lookback (NEW):** 12 monthly anchor points (18→126), HIPPO hidden OB
+🌀 **ICT Logo (NEW):** Fractal AMD cycles, CLS timings, London/NY sweet spots
 📈 **Trading Styles:** Swing (Month 6), Day Trading (Month 8), Scalping (Month 7-9)
 🔍 **Analysis:** Top-Down Analysis (Month 12), Multi-Asset (Month 10)
 🏆 **Best Pairs:** Ask "best pairs for ICT" to learn which instruments work best
@@ -354,6 +503,11 @@ Try asking about:
 • "What is the OSOK model?"
 • "Explain Top-Down Analysis"
 • "What is the Bread & Butter setup?"
+• "What is PO3 dealing range?" (NEW)
+• "What are Huddleston/Goldbach levels?" (NEW)
+• "Explain the 20-40-60 lookback" (NEW)
+• "What does the ICT logo mean?" (NEW)
+• "What is a HIPPO?" (NEW)
 
 ⚠️ Remember: Trading involves risk. These are educational analyses.`;
     }

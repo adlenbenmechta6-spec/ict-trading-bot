@@ -4,6 +4,7 @@ import { calculateATR, analyzeTrend, getDecimals, formatPrice, validateSignalPri
 import { calculateConfluenceScore, calculateProfessionalSLTP, calculateExitManagement, PROFESSIONAL_TRADER_MINDSET, getCurrentSessionInfo } from '@/lib/professional-trading-rules';
 import { chatCompletion } from '@/lib/ai';
 import { ICT_SIGNAL_SYSTEM_PROMPT } from '@/lib/ict-knowledge';
+import { ICT_DEMYSTIFYING_SYSTEM_PROMPT_ADDENDUM } from '@/lib/ict-demystifying-knowledge';
 import { detectAllICTPatterns, calculatePDZones, getCurrentKillZone } from '@/lib/ict-patterns';
 import { calculateRSI, detectAllPatterns } from '@/lib/trading-patterns';
 import { PAIRS } from '@/lib/trading-knowledge';
@@ -461,7 +462,8 @@ IMPORTANT RULES:
 - Only mention A+ and A quality setups
 - Use ICT terminology (Kill Zone, OB, FVG, MSS, Liquidity)
 - Keep it under 200 words
-- Mention the current session and day quality`,
+- Mention the current session and day quality
+${ICT_DEMYSTIFYING_SYSTEM_PROMPT_ADDENDUM}`,
       userMessage: `DAILY PRO SCAN — ${algeria.dayName} ${algeria.timeStr} (Algeria Time)
 Session: ${sessionLabel}
 Day Quality: ${dayLabel} (Score: ${dayInfo.score})

@@ -136,12 +136,12 @@ A 3-candle structure indicating a gap between the high and low of the first and 
     } else if (lowerMsg.includes('kill zone') || lowerMsg.includes('silver bullet')) {
       response = `⏰ **ICT Kill Zones** — ⭐⭐⭐⭐⭐
 
-Time windows with the highest trading volume and institutional activity:
+Time windows with the highest trading volume and institutional activity (all times NY/EST):
 
-🌍 **Asian Kill Zone:** 7:00-10:00 PM NY Time
-🇬🇧 **London Kill Zone:** 2:00-5:00 AM NY Time
-🇺🇸 **New York AM Kill Zone:** 7:00-10:00 AM NY Time
-🕐 **London Close Kill Zone:** 10:00 AM-12:00 PM NY Time
+🌍 **Asian Kill Zone:** 8:00 PM - 12:00 AM (20:00-00:00) — Asian session accumulation
+🇬🇧 **London Kill Zone:** 2:00 AM - 5:00 AM — London manipulation (Judas swing window)
+🇺🇸 **New York AM Kill Zone:** 7:00 AM - 10:00 AM — NY distribution (best: 8:30-11:00 AM)
+🕐 **London Close Kill Zone:** 10:00 AM - 12:00 PM — London Close KZ
 
 🎯 **Silver Bullet Strategy** — Occurs 3 times daily:
 1. London: 10:00-11:00 AM GMT

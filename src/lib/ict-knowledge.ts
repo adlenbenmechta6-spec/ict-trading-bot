@@ -200,9 +200,11 @@ A time-based strategy relying on liquidity and FVG - occurs 3 times daily:
 Steps: Identify BSL and SSL on 15-min → Wait for MSS → Enter at FVG
 
 ### 4. Kill Zones ⭐⭐⭐⭐⭐
-Time windows with high trading volume:
-- Asia: 7:00-10:00 PM NY | London: 2:00-5:00 AM NY
-- New York: 7:00-10:00 AM NY | London Close: 10:00 AM-12:00 PM NY
+Time windows with high trading volume (all times NY/EST):
+- Asia: 8:00 PM - 12:00 AM (20:00-00:00) — Asian session accumulation
+- London: 2:00 AM - 5:00 AM — London manipulation
+- New York AM: 7:00 AM - 10:00 AM — NY distribution (best: 8:30-11:00 AM)
+- London Close: 10:00 AM - 12:00 PM — London Close KZ
 
 ---
 

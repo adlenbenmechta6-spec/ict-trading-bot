@@ -465,7 +465,9 @@ DAILY AMD CYCLE (CLS TIMINGS)
 A "true day" in ICT CLS (Continuous Linked Settlement) terms runs:
   20:00–20:00 CET  (Central European Time)
   19:00–19:00 BST  (British Summer Time)
-  14:00–14:00 EST  (Eastern Standard Time)
+  14:00–14:00 EST  (Eastern Standard Time — i.e. 2:00 PM EST = the ICT "true day" start)
+
+NOTE: The Demystifying ICT book uses CET as the primary timezone. To convert CET to NY/EST time (which is what the rest of the bot's ICT Kill Zone logic uses), SUBTRACT 6 hours. Example: 05:00 CET → 23:00 EST (previous day). When the book says "London manipulation 05:00-11:00 CET", that equals "23:00-05:00 EST" — this aligns with the standard ICT London Kill Zone window (2:00-5:00 AM EST is the highest-activity core, with the broader 23:00-05:00 EST covering the full London pre-open + open).
 
 DAILY PHASE MAPPING
 - ACCUMULATION phase → ASIAN SESSION (9 hours long)
@@ -645,15 +647,17 @@ NUMBER 9 → 20-40-60 LOOKBACK PARTITIONS
 
 ICT LOGO = FRACTAL AMD CYCLE
 - Small circle between two bigger circles = ACCUMULATION → MANIPULATION → DISTRIBUTION
-- True day (CLS): 20:00–20:00 CET (19:00–19:00 BST / 14:00–14:00 EST)
-- Asian session (9h) = ACCUMULATION
-- London Open (6h, 05:00–11:00 CET) = MANIPULATION (forms the Judas swing)
+- True day (CLS): 20:00–20:00 CET (19:00–19:00 BST / 14:00–14:00 EST = 2:00 PM EST start)
+- Asian session (9h) = ACCUMULATION (8:00 PM - 5:00 AM EST)
+- London Open (6h, 05:00–11:00 CET = 23:00-05:00 EST) = MANIPULATION (forms the Judas swing)
+  • NOTE: The 2:00-5:00 AM EST window used in the bot's London Kill Zone is the highest-activity core of this 6h manipulation window.
 - New York (9h) = DISTRIBUTION
 - 3-6-9 encoded: 3 sessions, 6-hour manipulation, 9-hour accumulation/distribution
 - Sweet spots for manipulation entries:
   • London:    07:30–08:30 CET (01:30–02:30 EST)
   • New York:  14:30–16:30 CET (08:30–12:30 EST)
 - Each phase contains a smaller fractal AMD cycle: consolidation → MSS → retracement (OTE) → expansion into pool of interest → reversal (typically in the middle of the distribution cycle).
+- TIMEZONE NOTE: Demystifying ICT uses CET as primary. All other bot knowledge sources (ICT 2022, SMC, professional rules) use NY/EST time. To convert CET → EST, subtract 6 hours.
 
 PRACTICAL CHECKLIST FOR EVERY SIGNAL:
 1. Identify current PO3 dealing range (DR Low = FLOOR(price/PO3) * PO3, DR High = DR Low + PO3)

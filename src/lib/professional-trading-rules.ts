@@ -710,8 +710,12 @@ export function getCurrentSessionInfo(utcHour: number): {
   // Convert to NY time (EST = UTC-5)
   const nyHour = (utcHour - 5 + 24) % 24;
 
-  // Kill Zones (NY/EST Time)
-  if (nyHour >= 19 || nyHour < 0) {
+  // Kill Zones (NY/EST Time) — aligned with ICT 2022 Mentorship:
+  //   Asia: 8:00 PM - 12:00 AM (20:00-00:00)
+  //   London: 2:00 AM - 5:00 AM
+  //   NY AM: 7:00 AM - 10:00 AM (best 8:30-11:00)
+  //   London Close: 10:00 AM - 12:00 PM
+  if (nyHour >= 20 || nyHour < 0) {
     return {
       killZone: 'Asian Kill Zone',
       killZoneActive: true,
@@ -762,7 +766,7 @@ export function getCurrentSessionInfo(utcHour: number): {
       session: 'New York PM',
       sessionPhase: 'Distribution/Continuation',
       bestTradingWindow: false,
-      nextKillZone: 'Asian Kill Zone (7:00-10:00 PM EST)',
+      nextKillZone: 'Asian Kill Zone (8:00 PM-12:00 AM EST)',
     };
   }
 
